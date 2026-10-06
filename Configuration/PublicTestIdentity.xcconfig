@@ -1,0 +1,3 @@
+APP_TEST_BUNDLE_IDENTIFIER = com.lycaennaa.intreccio.tests
+APP_INTEGRATION_TEST_BUNDLE_IDENTIFIER = com.lycaennaa.intreccio.integration-tests
+PRODUCT_BUNDLE_IDENTIFIER = $(APP_TEST_BUNDLE_IDENTIFIER)

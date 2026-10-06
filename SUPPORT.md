@@ -1,0 +1,13 @@
+# Support
+
+## Get help
+
+For product support and bug reports, open an issue from this repository's GitHub Issues tab.
+
+## Before asking
+
+Include the app version, macOS version, Git version, steps to reproduce, and the expected and actual result. Remove private paths, repository contents, tokens, and other sensitive data from logs or screenshots before sharing them.
+
+## Limitations
+
+The built-in clone panel supports public GitHub repositories only. Git LFS must be installed separately when a repository uses it. See [FEATURES.md](FEATURES.md) for the full list of known limitations.

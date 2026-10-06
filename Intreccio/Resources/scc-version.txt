@@ -1,0 +1,4 @@
+scc 4.1.0
+Source: https://github.com/boyter/scc/
+License: MIT
+Architecture: arm64

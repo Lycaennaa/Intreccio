@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Xcode user and build data
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
+build/
+*.xcarchive
+
+# Local test artifacts
+**/.test-tmp/
+
+# Release artifacts
+dist/
+/t3code/
+/.kilo/
+/To-Do.txt

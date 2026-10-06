@@ -1,0 +1,61 @@
+included:
+  - Intreccio
+  - IntreccioTests
+  - IntreccioIntegrationTests
+
+excluded:
+  - .build
+  - .swiftpm
+  - DerivedData
+  - build
+  - Build
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - missing_docs
+  - redundant_nil_coalescing
+  - unneeded_parentheses_in_closure_argument
+  - unhandled_throwing_task
+  - prefer_condition_list
+  - prefer_key_path
+  - sorted_imports
+  - unneeded_throws_rethrows
+  - unowned_variable_capture
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+  ignores_urls: true
+
+file_length:
+  warning: 550
+  error: 800
+
+function_body_length:
+  warning: 60
+  error: 100
+
+function_parameter_count:
+  warning: 5
+  error: 8
+
+type_body_length:
+  warning: 350
+  error: 500
+
+missing_docs:
+  warning: [open, public]
+  excludes_extensions: true
+  excludes_inherited_types: true
+
+type_name:
+  max_length: 60
+  excluded:
+    - ID
+
+identifier_name:
+  max_length: 60
