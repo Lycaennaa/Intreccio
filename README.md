@@ -37,7 +37,11 @@ xattr -dr com.apple.quarantine /Applications/Intreccio.app
 
 ## Docs
 
-- [Features](FEATURES.md) · [Privacy](PRIVACY.md)
-- [Setup](SETUP.md) · [Development](DEVELOPMENT.md) · [Support](SUPPORT.md)
+- [Features](FEATURES.md)
+- [Privacy](PRIVACY.md)
+- [Setup](SETUP.md)
+- [Development](DEVELOPMENT.md)
+- [Support](SUPPORT.md)
 - [Full documentation index](DOCUMENTATION.md)
-- [License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+- [License](LICENSE) 
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
