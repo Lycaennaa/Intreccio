@@ -120,16 +120,20 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
     }
     @objc func cloneRepository(_ sender: Any?) {
         guard !isTerminating, let window else { return }
-        RepositoryClonePanel.present(on: window) { [weak self] sourceURLs, destinationParent in
-            guard let self, !self.isTerminating else { return }
-            for sourceURL in sourceURLs {
-                self.downloadManager.startClone(
-                    from: sourceURL,
-                    into: destinationParent,
-                    presentingWindow: window
-                )
+        RepositoryClonePanel.present(
+            on: window,
+            loadRepositories: { [coordinator] in try await coordinator.githubRepositories() },
+            onClone: { [weak self] sourceURLs, destinationParent in
+                guard let self, !self.isTerminating else { return }
+                for sourceURL in sourceURLs {
+                    self.downloadManager.startClone(
+                        from: sourceURL,
+                        into: destinationParent,
+                        presentingWindow: window
+                    )
+                }
             }
-        }
+        )
     }
     @objc func showDownloads(_ sender: Any?) {
         guard !isTerminating, let window else { return }

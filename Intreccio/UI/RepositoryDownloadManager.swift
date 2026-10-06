@@ -120,7 +120,7 @@ final class RepositoryDownloadManager: NSObject, NSWindowDelegate {
 
         let coordinator = self.coordinator
         let operationTask = Task { [weak self, coordinator, control, progressTask] in
-            let result = await coordinator.clonePublicRepository(
+            let result = await coordinator.cloneRepository(
                 from: job.sourceURL,
                 into: job.destinationParent,
                 control: control,

@@ -9,6 +9,8 @@ final class ChangesMutationControlsController: NSObject {
         let canUnstageAll: Bool
         let canStash: Bool
         let canRestoreStash: Bool
+        let canPush: Bool
+        let pushButtonTitle: String
         let rebaseButtonTitle: String
         let rebaseLabel: String
         let rebaseInProgress: Bool
@@ -26,6 +28,7 @@ final class ChangesMutationControlsController: NSObject {
     let restoreStashButton = NSButton(title: "Restore Latest Stash", target: nil, action: nil)
     let rebaseLabel = NSTextField(wrappingLabelWithString: "")
     let rebaseButton = NSButton(title: "Rebase on Upstream", target: nil, action: nil)
+    let pushButton = NSButton(title: "Push to Upstream", target: nil, action: nil)
     let continueRebaseButton = NSButton(title: "Continue Rebase", target: nil, action: nil)
     let abortRebaseButton = NSButton(title: "Abort Rebase", target: nil, action: nil)
     let mutationLabel = NSTextField(wrappingLabelWithString: "")
@@ -64,6 +67,8 @@ final class ChangesMutationControlsController: NSObject {
         stashButton.action = #selector(ChangesMutationController.stashChanges(_:))
         restoreStashButton.target = mutationController
         restoreStashButton.action = #selector(ChangesMutationController.restoreLatestStash(_:))
+        pushButton.target = mutationController
+        pushButton.action = #selector(ChangesMutationController.pushToUpstream(_:))
         rebaseButton.target = mutationController
         rebaseButton.action = #selector(ChangesMutationController.rebaseOnUpstream(_:))
         continueRebaseButton.target = mutationController
@@ -78,6 +83,7 @@ final class ChangesMutationControlsController: NSObject {
         rebaseButton.setAccessibilityHelp("Replay local commits on the configured upstream branch.")
         continueRebaseButton.setAccessibilityHelp("Continue after all rebase conflicts are resolved and staged.")
         abortRebaseButton.setAccessibilityHelp("Abort the rebase and restore the pre-rebase branch state.")
+        pushButton.setAccessibilityHelp("Push commits to the configured upstream; force-push is disabled.")
         stashButton.setAccessibilityHelp("Save all staged, unstaged, and untracked changes, then clean the working tree.")
         restoreStashButton.setAccessibilityHelp("Restore staged, unstaged, and untracked changes from the latest stash.")
 
@@ -116,22 +122,30 @@ final class ChangesMutationControlsController: NSObject {
         presentationView.alignment = .leading
         presentationView.spacing = 6
 
-        let controls = NSStackView(
-            views: [
-                rebaseLabel,
-                rebaseButton,
-                rebaseRow,
-                stashRow,
-                stageRow,
-                unstageRow,
-                commitView,
-                presentationView,
-            ]
-        )
+        let controls = NSStackView(views: [
+            pushButton,
+            rebaseLabel,
+            rebaseButton,
+            rebaseRow,
+            stashRow,
+            stageRow,
+            unstageRow,
+            commitView,
+            presentationView
+        ])
         controls.orientation = .vertical
         controls.alignment = .leading
         controls.spacing = 6
-        for child in [rebaseButton, rebaseRow, stashRow, stageRow, unstageRow, commitView, presentationView] {
+        for child in [
+            pushButton,
+            rebaseButton,
+            rebaseRow,
+            stashRow,
+            stageRow,
+            unstageRow,
+            commitView,
+            presentationView
+        ] {
             child.widthAnchor.constraint(equalTo: controls.widthAnchor).isActive = true
         }
         commitView.translatesAutoresizingMaskIntoConstraints = false
@@ -149,6 +163,8 @@ final class ChangesMutationControlsController: NSObject {
         unstageAllButton.isEnabled = configuration.canUnstageAll
         stashButton.isEnabled = configuration.canStash
         restoreStashButton.isEnabled = configuration.canRestoreStash
+        pushButton.title = configuration.pushButtonTitle
+        pushButton.isEnabled = configuration.canPush
 
         rebaseButton.title = configuration.rebaseButtonTitle
         rebaseButton.isHidden = configuration.rebaseInProgress

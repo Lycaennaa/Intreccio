@@ -18,6 +18,28 @@ extension AppShellTests {
         XCTAssertFalse(availability.canContinue)
         XCTAssertFalse(availability.canAbort)
     }
+    func testPushPolicyAllowsOnlyAheadCurrentBranchesWithoutDivergence() {
+        var status = RepoStatus()
+        status.branch.head = "main"
+        status.branch.upstream = "origin/main"
+        status.branch.ahead = 2
+        status.changes = [FileChange(
+            path: "dirty.txt",
+            originalPath: nil,
+            indexState: .unmodified,
+            worktreeState: .modified,
+            kind: .ordinary,
+            submoduleState: nil
+        )]
+
+        XCTAssertTrue(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        status.branch.behind = 1
+        XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        status.branch.behind = 0
+        status.isRebaseInProgress = true
+        XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+    }
+
 
     @MainActor
     func testMutationContextTracksCurrentSelectionAndClearsMissingStatus() {

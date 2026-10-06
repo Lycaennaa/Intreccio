@@ -23,6 +23,10 @@ nonisolated enum GitServiceError: Error, Equatable, CustomStringConvertible {
     case detachedHead
     case missingUpstream
     case upstreamHasNoNewCommits
+    case branchHasNoOutgoingCommits
+    case branchBehindUpstream
+    case invalidPushDestination(String)
+    case pushTargetChanged
     case rebaseAlreadyInProgress
     case rebaseNotInProgress
     case dirtyWorktreeForRebase([String])
@@ -65,9 +69,13 @@ nonisolated enum GitServiceError: Error, Equatable, CustomStringConvertible {
             "Cannot refresh an upstream mapped outside remote-tracking refs: \(ref)"
         case .upstreamRefNotFound(let ref):
             "The configured upstream ref was not found on the remote: \(ref)"
-        case .detachedHead: "Rebase requires a checked-out local branch"
+        case .detachedHead: "This operation requires a checked-out local branch"
         case .missingUpstream: "The current branch has no configured upstream"
         case .upstreamHasNoNewCommits: "The current branch is not behind its upstream"
+        case .branchHasNoOutgoingCommits: "The current branch has no commits to push"
+        case .branchBehindUpstream: "Rebase the current branch before pushing"
+        case .invalidPushDestination(let ref): "The configured push destination is invalid: \(ref)"
+        case .pushTargetChanged: "The branch or push destination changed after confirmation. Review and confirm again."
         case .rebaseAlreadyInProgress: "A rebase is already in progress"
         case .rebaseNotInProgress: "No rebase is in progress"
         case .dirtyWorktreeForRebase(let paths):
@@ -97,21 +105,29 @@ actor GitService {
     static let historyPageSize = 15
 
     let runner: any ProcessRunning
+    let githubCLI: GitHubCLI
     let sccLineCounter: (any SLOCCounter)?
     var untrackedDiffAnalysisCacheRepository: URL?
     var untrackedDiffAnalysisCache = UntrackedDiffAnalysisCache()
 
     init() {
         self.runner = GitProcessRunner()
+        self.githubCLI = GitHubCLI()
         self.sccLineCounter = SCCLineCounter.bundled()
     }
 
     init(
         runner: any ProcessRunning,
-        sccLineCounter: (any SLOCCounter)? = nil
+        sccLineCounter: (any SLOCCounter)? = nil,
+        githubCLI: GitHubCLI = GitHubCLI()
     ) {
         self.runner = runner
+        self.githubCLI = githubCLI
         self.sccLineCounter = sccLineCounter
+    }
+
+    func githubRepositories() async throws -> [GitHubRepository] {
+        try await githubCLI.repositories()
     }
 
     func repositoryRoot(at directory: URL) async throws -> URL {

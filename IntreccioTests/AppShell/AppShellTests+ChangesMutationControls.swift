@@ -16,6 +16,8 @@ extension AppShellTests {
         XCTAssertEqual(controls.stageButton.action.map(NSStringFromSelector), "stageSelected:")
         XCTAssertTrue(controls.rebaseButton.target === mutationController)
         XCTAssertEqual(controls.rebaseButton.action.map(NSStringFromSelector), "rebaseOnUpstream:")
+        XCTAssertTrue(controls.pushButton.target === mutationController)
+        XCTAssertEqual(controls.pushButton.action.map(NSStringFromSelector), "pushToUpstream:")
         XCTAssertTrue(controls.disclosureButton.target === controls)
         XCTAssertEqual(controls.disclosureButton.action.map(NSStringFromSelector), "toggleMutationDetails:")
         XCTAssertTrue(controls.copyErrorButton.target === controls)
@@ -44,6 +46,8 @@ extension AppShellTests {
                 canUnstageAll: false,
                 canStash: true,
                 canRestoreStash: false,
+                canPush: false,
+                pushButtonTitle: "Push 2 to origin/main",
                 rebaseButtonTitle: "Rebase on origin/main",
                 rebaseLabel: "Rebase paused with 1 conflicted file.",
                 rebaseInProgress: true,
@@ -59,6 +63,8 @@ extension AppShellTests {
         XCTAssertTrue(controls.unstageButton.isEnabled)
         XCTAssertTrue(controls.stashButton.isEnabled)
         XCTAssertFalse(controls.restoreStashButton.isEnabled)
+        XCTAssertFalse(controls.pushButton.isEnabled)
+        XCTAssertEqual(controls.pushButton.title, "Push 2 to origin/main")
         XCTAssertEqual(controls.rebaseButton.title, "Rebase on origin/main")
         XCTAssertTrue(controls.rebaseButton.isHidden)
         XCTAssertFalse(controls.continueRebaseButton.isHidden)

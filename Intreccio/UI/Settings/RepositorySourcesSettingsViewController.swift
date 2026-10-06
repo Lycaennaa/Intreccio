@@ -164,16 +164,20 @@ final class RepositorySourcesSettingsViewController: NSViewController, SettingsS
     }
     @objc private func cloneSourceRepository(_ sender: Any?) {
         guard let window = view.window else { return }
-        RepositoryClonePanel.present(on: window) { [weak self] sourceURLs, destinationParent in
-            guard let self else { return }
-            for sourceURL in sourceURLs {
-                self.downloadManager.startClone(
-                    from: sourceURL,
-                    into: destinationParent,
-                    presentingWindow: window
-                )
+        RepositoryClonePanel.present(
+            on: window,
+            loadRepositories: { [coordinator] in try await coordinator.githubRepositories() },
+            onClone: { [weak self] sourceURLs, destinationParent in
+                guard let self else { return }
+                for sourceURL in sourceURLs {
+                    self.downloadManager.startClone(
+                        from: sourceURL,
+                        into: destinationParent,
+                        presentingWindow: window
+                    )
+                }
             }
-        }
+        )
     }
     @objc private func createLocalRepository(_ sender: Any?) {
         guard let window = view.window else { return }

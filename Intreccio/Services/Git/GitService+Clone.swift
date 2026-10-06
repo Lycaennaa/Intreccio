@@ -61,7 +61,7 @@ nonisolated private final class GitCloneProgressParser: @unchecked Sendable {
 }
 
 nonisolated enum RepositoryCloneError: Error, Equatable, CustomStringConvertible {
-    case invalidPublicRepositoryURL
+    case invalidRepositoryURL
     case invalidDestination(String)
     case destinationExists(String)
     case ownershipVerificationFailed(String)
@@ -73,8 +73,8 @@ nonisolated enum RepositoryCloneError: Error, Equatable, CustomStringConvertible
 
     var description: String {
         switch self {
-        case .invalidPublicRepositoryURL:
-            return "Enter a public GitHub repository URL, such as https://github.com/owner/repository."
+        case .invalidRepositoryURL:
+            return "Enter a GitHub repository URL, such as https://github.com/owner/repository."
         case .invalidDestination(let message):
             return message
         case .destinationExists(let path):
@@ -96,14 +96,14 @@ nonisolated enum RepositoryCloneError: Error, Equatable, CustomStringConvertible
 }
 
 extension GitService {
-    func clonePublicRepository(
+    func cloneRepository(
         from source: URL,
         into parentDirectory: URL,
         control: ProcessControl? = nil,
         progress: @escaping @Sendable (RepositoryCloneProgress) -> Void = { _ in }
     ) async throws -> RepositoryCreationReceipt {
-        guard let cloneURL = GitHubRepositoryURL.publicCloneURL(from: source.absoluteString) else {
-            throw RepositoryCloneError.invalidPublicRepositoryURL
+        guard let cloneURL = GitHubRepositoryURL.cloneURL(from: source.absoluteString) else {
+            throw RepositoryCloneError.invalidRepositoryURL
         }
         defer { control?.finish() }
 
@@ -117,7 +117,7 @@ extension GitService {
 
         let repositoryName = cloneURL.deletingPathExtension().lastPathComponent
         guard !repositoryName.isEmpty else {
-            throw RepositoryCloneError.invalidPublicRepositoryURL
+            throw RepositoryCloneError.invalidRepositoryURL
         }
         let destination = parent.appendingPathComponent(repositoryName, isDirectory: true)
         guard !fileManager.fileExists(atPath: destination.path) else {
@@ -156,42 +156,11 @@ extension GitService {
             )
             try Task.checkCancellation()
 
-            let lfsAttributes = try await runner.run(
-                repository: temporary,
-                arguments: ["grep", "-I", "-n", "-e", "filter=lfs", "--", ":(glob)**/.gitattributes"],
-                environment: networkEnvironment,
-                acceptedExitCodes: [0, 1, 128],
-                outputLimit: 64 * 1_024,
-                timeout: ProcessRunner.readTimeout,
-                priority: .normal
+            try await downloadGitLFSObjectsIfNeeded(
+                in: temporary,
+                control: control,
+                progress: progress
             )
-            let lfsCheck = try await runner.run(
-                repository: temporary,
-                arguments: ["lfs", "version"],
-                environment: networkEnvironment,
-                acceptedExitCodes: [0, 1, 2, 127],
-                outputLimit: 64 * 1_024,
-                timeout: ProcessRunner.readTimeout,
-                priority: .normal
-            )
-            if lfsAttributes.exitCode == 0, lfsCheck.exitCode != 0 {
-                throw RepositoryCloneError.gitLFSMissing
-            }
-            if lfsCheck.exitCode == 0 {
-                progress(RepositoryCloneProgress(detail: "Downloading Git LFS objects…", fractionCompleted: nil))
-                try await runStreamingGit(
-                    repository: temporary,
-                    arguments: ["lfs", "pull"],
-                    control: control,
-                    progress: progress
-                )
-                try await runStreamingGit(
-                    repository: temporary,
-                    arguments: ["submodule", "foreach", "--recursive", "git", "lfs", "pull"],
-                    control: control,
-                    progress: progress
-                )
-            }
 
             guard RepositoryPathPolicy.isRealDirectory(temporary),
                   RepositoryPathPolicy.isRealDirectory(temporary.appendingPathComponent(".git", isDirectory: true)) else {
@@ -227,6 +196,58 @@ extension GitService {
             }
             throw operationError
         }
+    }
+
+    private func downloadGitLFSObjectsIfNeeded(
+        in repository: URL,
+        control: ProcessControl?,
+        progress: @escaping @Sendable (RepositoryCloneProgress) -> Void
+    ) async throws {
+        let head = try await runner.run(
+            repository: repository,
+            arguments: ["rev-parse", "--verify", "--quiet", "HEAD"],
+            environment: readEnvironment,
+            acceptedExitCodes: [0, 1],
+            outputLimit: 128,
+            priority: .normal
+        )
+        guard head.exitCode == 0 else { return }
+
+        let lfsAttributes = try await runner.run(
+            repository: repository,
+            arguments: ["grep", "-I", "-n", "-e", "filter=lfs", "--", ":(glob)**/.gitattributes"],
+            environment: networkEnvironment,
+            acceptedExitCodes: [0, 1, 128],
+            outputLimit: 64 * 1_024,
+            timeout: ProcessRunner.readTimeout,
+            priority: .normal
+        )
+        let lfsCheck = try await runner.run(
+            repository: repository,
+            arguments: ["lfs", "version"],
+            environment: networkEnvironment,
+            acceptedExitCodes: [0, 1, 2, 127],
+            outputLimit: 64 * 1_024,
+            timeout: ProcessRunner.readTimeout,
+            priority: .normal
+        )
+        if lfsAttributes.exitCode == 0, lfsCheck.exitCode != 0 {
+            throw RepositoryCloneError.gitLFSMissing
+        }
+        guard lfsCheck.exitCode == 0 else { return }
+        progress(RepositoryCloneProgress(detail: "Downloading Git LFS objects…", fractionCompleted: nil))
+        try await runStreamingGit(
+            repository: repository,
+            arguments: ["lfs", "pull"],
+            control: control,
+            progress: progress
+        )
+        try await runStreamingGit(
+            repository: repository,
+            arguments: ["submodule", "foreach", "--recursive", "git", "lfs", "pull"],
+            control: control,
+            progress: progress
+        )
     }
 
     private func runStreamingGit(

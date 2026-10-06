@@ -1,6 +1,12 @@
 import Foundation
 import Darwin
 
+nonisolated struct GitUpstreamRefreshResult: Sendable {
+    let status: RepoStatus
+    let remote: String?
+    let remoteRef: String?
+}
+
 extension GitService {
     func ignoredPaths(
         repository: URL,
@@ -49,6 +55,20 @@ extension GitService {
         priority: ProcessPriority = .normal,
         expandUntrackedDirectories: Bool = true
     ) async throws -> RepoStatus {
+        try await statusWithUpstreamRefresh(
+            repository: repository,
+            refreshUpstream: refreshUpstream,
+            priority: priority,
+            expandUntrackedDirectories: expandUntrackedDirectories
+        ).status
+    }
+
+    func statusWithUpstreamRefresh(
+        repository: URL,
+        refreshUpstream: Bool = false,
+        priority: ProcessPriority = .normal,
+        expandUntrackedDirectories: Bool = true
+    ) async throws -> GitUpstreamRefreshResult {
         var status = try await repositoryStatus(
             repository: repository,
             priority: priority,
@@ -57,7 +77,7 @@ extension GitService {
         guard refreshUpstream,
               status.branch.upstream != nil,
               let branch = status.branch.head else {
-            return status
+            return GitUpstreamRefreshResult(status: status, remote: nil, remoteRef: nil)
         }
         let upstreamResult = try await runner.run(
             repository: repository,
@@ -65,7 +85,7 @@ extension GitService {
                 "for-each-ref",
                 "--format=%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)",
                 "--count=1",
-                "refs/heads/\(branch)",
+                "refs/heads/\(branch)"
             ],
             environment: readEnvironment,
             outputLimit: 12 * 1_024,
@@ -77,7 +97,7 @@ extension GitService {
             omittingEmptySubsequences: false
         )
         guard fields.count == 3 else {
-            return status
+            return GitUpstreamRefreshResult(status: status, remote: nil, remoteRef: nil)
         }
         let remote = String(decoding: fields[0], as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -86,7 +106,7 @@ extension GitService {
         let upstreamRef = String(decoding: fields[2], as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !remote.isEmpty, remote != ".", !remoteRef.isEmpty, !upstreamRef.isEmpty else {
-            return status
+            return GitUpstreamRefreshResult(status: status, remote: nil, remoteRef: nil)
         }
         guard upstreamRef.hasPrefix("refs/remotes/") else {
             throw GitServiceError.unsupportedUpstreamRef(upstreamRef)
@@ -134,7 +154,7 @@ extension GitService {
             repository: repository,
             arguments: [
                 "fetch", "--no-tags", "--no-write-fetch-head", "--recurse-submodules=no", "--",
-                remote, remoteObjectID,
+                remote, remoteObjectID
             ],
             environment: networkEnvironment,
             timeout: ProcessRunner.networkTimeout,
@@ -154,7 +174,7 @@ extension GitService {
             priority: priority,
             expandUntrackedDirectories: expandUntrackedDirectories
         )
-        return status
+        return GitUpstreamRefreshResult(status: status, remote: remote, remoteRef: remoteRef)
     }
 
 

@@ -49,6 +49,7 @@ final class ChangesMutationController: NSObject {
     private let coordinator: AppCoordinator
     private(set) lazy var controlsController = ChangesMutationControlsController(mutationController: self)
     private(set) var currentContext: MutationContext?
+    private var isPreparingPush = false
 
     var mutationState: RepositoryMutationState { coordinator.mutationState }
     var canStageSelected: Bool { controlsController.canStageSelected }
@@ -125,7 +126,6 @@ final class ChangesMutationController: NSObject {
         } else {
             rebaseLabel = ""
         }
-
         controlsController.render(
             ChangesMutationControlsController.Configuration(
                 canStageSelected: ChangesMutationPolicy.canStage(
@@ -150,6 +150,11 @@ final class ChangesMutationController: NSObject {
                 ),
                 canStash: stashAvailability.canStash,
                 canRestoreStash: stashAvailability.canRestore,
+                canPush: ChangesMutationPolicy.pushControlAvailability(
+                    status: status,
+                    mutationRunning: running
+                ),
+                pushButtonTitle: "Push \(status?.branch.ahead ?? 0) to \(status?.branch.upstream ?? "Upstream")",
                 rebaseButtonTitle: status?.branch.upstream.map { "Rebase on \($0)" } ?? "Rebase on Upstream",
                 rebaseLabel: rebaseLabel,
                 rebaseInProgress: rebaseInProgress,
@@ -411,6 +416,54 @@ final class ChangesMutationController: NSObject {
                       mutationRunning: self.coordinator.mutationState == .running
                   ).canStart else { return }
             self.coordinator.rebaseOnUpstream()
+        }
+    }
+    @objc func pushToUpstream(_ sender: Any?) {
+        guard !isPreparingPush,
+              let context = requireCurrentContext(for: "Push", requiresWindow: true),
+              ChangesMutationPolicy.pushControlAvailability(
+                  status: context.status,
+                  mutationRunning: coordinator.mutationState == .running
+              ) else { return }
+        guard let window = context.window else {
+            reportContextFailure(.windowUnavailable, action: "Push")
+            return
+        }
+        isPreparingPush = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { isPreparingPush = false }
+            guard let target = await coordinator.preparePushTarget(for: context.repositoryID) else { return }
+            guard isCurrentContext(context), coordinator.mutationState != .running else {
+                reportContextFailure(.stale, action: "Push")
+                return
+            }
+            presentPushConfirmation(target, context: context, window: window)
+        }
+    }
+
+    private func presentPushConfirmation(
+        _ target: GitPushTarget,
+        context: MutationContext,
+        window: NSWindow
+    ) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Push to \(target.upstream)?"
+        alert.informativeText = """
+        Push \(target.ahead) local commit\(target.ahead == 1 ? "" : "s") from \(target.branch).
+        Uncommitted changes are not included. Force push is never used.
+        """
+        alert.addButton(withTitle: "Push")
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn, let self else { return }
+            guard isCurrentContext(context) else {
+                reportContextFailure(.stale, action: "Push")
+                return
+            }
+            guard coordinator.mutationState != .running else { return }
+            coordinator.pushToUpstream(target)
         }
     }
 

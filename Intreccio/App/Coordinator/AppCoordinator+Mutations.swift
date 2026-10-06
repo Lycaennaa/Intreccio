@@ -27,7 +27,6 @@ extension AppCoordinator {
         beginMutation(.restoreLatestStash)
     }
 
-
     func discard(changes: [FileChange]) {
         beginMutation(.discard(changes: changes))
     }
@@ -50,6 +49,25 @@ extension AppCoordinator {
         } else {
             beginMutation(.commit(message: commitMessage))
         }
+    }
+    func preparePushTarget(for repositoryID: UUID) async -> GitPushTarget? {
+        guard !isShuttingDown,
+              let repository = repositories.first(where: { $0.id == repositoryID }),
+              repository.availability == .available else { return nil }
+        do {
+            return try await gitService.preparePushTarget(repository: repository.canonicalURL)
+        } catch is CancellationError {
+            return nil
+        } catch {
+            guard !isShuttingDown, !Task.isCancelled else { return nil }
+            errorMessage = "Could not prepare push: \(error)"
+            publish()
+            return nil
+        }
+    }
+
+    func pushToUpstream(_ target: GitPushTarget) {
+        beginMutation(.pushToUpstream(target))
     }
 
     func rebaseOnUpstream() {
@@ -78,9 +96,15 @@ extension AppCoordinator {
         case ignore(selectedPath: GitPath, targetPath: GitPath, isDirectory: Bool)
         case commit(message: String)
         case amend(message: String, expectedHeadObjectID: String)
+        case pushToUpstream(GitPushTarget)
         case rebaseOnUpstream
         case continueRebase
         case abortRebase
+
+        var refreshesUpstream: Bool {
+            if case .pushToUpstream = self { return true }
+            return false
+        }
 
         var isCommit: Bool {
             switch self {
@@ -99,6 +123,7 @@ extension AppCoordinator {
             case .ignore: "Could not update .gitignore"
             case .commit: "Could not commit changes"
             case .amend: "Could not amend commit"
+            case .pushToUpstream: "Could not push to upstream"
             case .rebaseOnUpstream: "Could not rebase on upstream"
             case .continueRebase: "Could not continue rebase"
             case .abortRebase: "Could not abort rebase"
@@ -114,11 +139,12 @@ extension AppCoordinator {
               let repository = repositories.first(where: { $0.id == repositoryID }),
               repository.availability == .available,
               repositoryRefreshStates[repositoryID]?.status != nil else { return }
+        let repositoryURL = repository.canonicalURL
+        if case let .pushToUpstream(target) = mutation, target.repository != repositoryURL { return }
         mutationGeneration &+= 1
         let generation = mutationGeneration
         let operationID = UUID()
         mutationID = operationID
-        let repositoryURL = repository.canonicalURL
         mutationState = .running
         publish()
         mutationTask = Task { [weak self, gitService] in
@@ -150,6 +176,8 @@ extension AppCoordinator {
                         message: message,
                         expectedHeadObjectID: expectedHeadObjectID
                     )
+                case .pushToUpstream(let target):
+                    try await gitService.pushToUpstream(target: target)
                 case .rebaseOnUpstream:
                     try await gitService.rebaseOnUpstream(repository: repositoryURL)
                 case .continueRebase:
@@ -166,6 +194,7 @@ extension AppCoordinator {
                 generation: generation,
                 operationID: operationID,
                 wasCommit: mutation.isCommit,
+                refreshUpstream: mutation.refreshesUpstream,
                 failure: failure
             )
         }
@@ -176,6 +205,7 @@ extension AppCoordinator {
         generation: UInt64,
         operationID: UUID,
         wasCommit: Bool,
+        refreshUpstream: Bool = false,
         failure: OperationFailure?
     ) {
         let ownsTask = mutationID == operationID
@@ -189,6 +219,7 @@ extension AppCoordinator {
         }
         runtime.enqueueStatusRefreshes(
             for: [repositoryID],
+            refreshUpstream: refreshUpstream,
             requestKind: .destructiveOperation
         )
         guard mutationGeneration == generation,
@@ -223,6 +254,5 @@ extension AppCoordinator {
             usesDefaultCommitMessage = true
         }
     }
-
 
 }

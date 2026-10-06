@@ -10,4 +10,4 @@ Include the app version, macOS version, Git version, steps to reproduce, and the
 
 ## Limitations
 
-The built-in clone panel supports public GitHub repositories only. Git LFS must be installed separately when a repository uses it. See [FEATURES.md](FEATURES.md) for the full list of known limitations.
+Authenticated repository browsing uses GitHub CLI (`gh`) signed in with `gh auth login` in Terminal. Private clones can use `gh` or another configured Git credential helper. Git LFS must be installed separately when a repository uses it. See [FEATURES.md](FEATURES.md) for limitations.

@@ -135,4 +135,13 @@ nonisolated enum ChangesMutationPolicy {
             && status.changes.isEmpty
         return (canStart, false, false)
     }
+    static func pushControlAvailability(status: RepoStatus?, mutationRunning: Bool) -> Bool {
+        guard let status else { return false }
+        return !mutationRunning
+            && !status.isRebaseInProgress
+            && status.branch.head != nil
+            && status.branch.upstream != nil
+            && status.branch.ahead > 0
+            && status.branch.behind == 0
+    }
 }

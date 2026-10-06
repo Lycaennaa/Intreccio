@@ -58,14 +58,14 @@ extension AppCoordinator {
         }
     }
     @discardableResult
-    func clonePublicRepository(
+    func cloneRepository(
         from sourceURL: URL,
         into destinationParent: URL,
         control: ProcessControl? = nil,
         progress: @escaping @Sendable (RepositoryCloneProgress) -> Void = { _ in }
     ) async -> RepositoryCloneResult {
         do {
-            let outcome = try await catalog.clonePublicRepository(
+            let outcome = try await catalog.cloneRepository(
                 from: sourceURL,
                 into: destinationParent,
                 control: control,
@@ -90,6 +90,11 @@ extension AppCoordinator {
             publish()
             return .failed(message)
         }
+    }
+
+    func githubRepositories() async throws -> [GitHubRepository] {
+        guard !isShuttingDown else { throw CancellationError() }
+        return try await gitService.githubRepositories()
     }
     private func selectRepository(at url: URL) {
         let canonicalURL = RepositoryPathPolicy.canonicalURL(url)

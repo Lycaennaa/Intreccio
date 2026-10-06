@@ -53,7 +53,7 @@ nonisolated enum GitHubRepositoryURL {
         components.path = "/\(owner)/\(repository)"
         return components.url
     }
-    static func publicCloneURL(from remote: String) -> URL? {
+    static func cloneURL(from remote: String) -> URL? {
         guard let webURL = webURL(from: remote),
               var components = URLComponents(url: webURL, resolvingAgainstBaseURL: false) else {
             return nil

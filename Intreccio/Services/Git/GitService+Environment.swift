@@ -30,11 +30,17 @@ extension GitService {
     }
 
     var networkEnvironment: [String: String] {
-        [
+        var environment = [
             "LC_ALL": "C",
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_ASKPASS": "/usr/bin/false",
-            "SSH_ASKPASS": "/usr/bin/false",
+            "SSH_ASKPASS": "/usr/bin/false"
         ]
+        environment.merge(
+            GitHubCLIExecutable.gitCredentialEnvironment(
+                executableURL: GitHubCLIExecutable.resolve()
+            )
+        ) { _, new in new }
+        return environment
     }
 }

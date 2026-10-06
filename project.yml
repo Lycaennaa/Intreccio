@@ -72,6 +72,8 @@ targets:
     platform: macOS
     sources:
       - path: IntreccioTests
+        excludes:
+          - .test-tmp
     dependencies:
       - target: Intreccio
     configFiles:

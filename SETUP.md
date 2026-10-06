@@ -8,7 +8,7 @@ This guide covers installing and using the released macOS app. Source builds bel
 - Git available as `git` on `PATH` for repository operations.
 - Git LFS installed separately for repositories that use it.
 
-The built-in clone panel supports public GitHub repositories only. Existing local repositories use their configured Git remotes and authentication. See [FEATURES.md](FEATURES.md) for limitations.
+GitHub CLI (`gh`) is optional. To browse GitHub repositories or use the `gh` account for private clones and HTTPS Git operations, install `gh` and run `gh auth login` in Terminal. Intreccio uses that session for GitHub.com through a per-process helper, without changing global Git configuration. Existing Git credential helpers and SSH authentication continue to work. See [FEATURES.md](FEATURES.md) for limitations.
 
 ## Install
 
@@ -26,7 +26,7 @@ xattr -dr com.apple.quarantine /Applications/Intreccio.app
 
 ## Configure
 
-Add folders to watch or add repositories directly in the app. Intreccio uses the Git executable on `PATH`; configure Git's identity, remotes, and credential helpers in Git as usual. `just` is optional and only needed to run recipes from repository `justfile` files.
+Add folders to watch or add repositories directly in the app. Intreccio uses the Git executable on `PATH`; configure Git's identity and remotes in Git as usual. For authenticated repository browsing, install GitHub CLI and run `gh auth login` in Terminal. Existing Git credential helpers can also authenticate clones and remote operations. `just` is optional and only needed to run recipes from repository `justfile` files.
 
 ## Verify
 

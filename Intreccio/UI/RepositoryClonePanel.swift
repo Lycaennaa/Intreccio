@@ -4,9 +4,14 @@ import AppKit
 enum RepositoryClonePanel {
     static func present(
         on window: NSWindow,
+        loadRepositories: @escaping @MainActor () async throws -> [GitHubRepository],
         onClone: @escaping @MainActor ([URL], URL) -> Void
     ) {
-        let controller = RepositoryCloneInputPanelController(hostWindow: window, onClone: onClone)
+        let controller = RepositoryCloneInputPanelController(
+            hostWindow: window,
+            loadRepositories: loadRepositories,
+            onClone: onClone
+        )
         let panel = RepositoryCloneInputPanelWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 330),
             styleMask: [.borderless],
@@ -44,7 +49,7 @@ enum RepositoryClonePanel {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         guard !lines.isEmpty else { return nil }
-        let cloneURLs = lines.compactMap { GitHubRepositoryURL.publicCloneURL(from: $0) }
+        let cloneURLs = lines.compactMap { GitHubRepositoryURL.cloneURL(from: $0) }
         return cloneURLs.count == lines.count ? cloneURLs : nil
     }
 }
@@ -70,15 +75,25 @@ private final class PaddedButton: NSButton {
 @MainActor
 private final class RepositoryCloneInputPanelController: NSViewController, NSTextViewDelegate, NSWindowDelegate {
     private weak let hostWindow: NSWindow?
+    private let loadRepositories: @MainActor () async throws -> [GitHubRepository]
     private let onClone: @MainActor ([URL], URL) -> Void
     weak var panel: NSPanel?
     private var outsideClickMonitor: Any?
     private var placeholderLabel: NSTextField?
     private var errorLabel: NSTextField?
+    private var browseButton: NSButton?
+    private var browseGeneration: UInt64 = 0
+    private var browseTask: Task<Void, Never>?
+    private var isShowingRepositoryPicker = false
     private(set) var textView: NSTextView!
 
-    init(hostWindow: NSWindow, onClone: @escaping @MainActor ([URL], URL) -> Void) {
+    init(
+        hostWindow: NSWindow,
+        loadRepositories: @escaping @MainActor () async throws -> [GitHubRepository],
+        onClone: @escaping @MainActor ([URL], URL) -> Void
+    ) {
         self.hostWindow = hostWindow
+        self.loadRepositories = loadRepositories
         self.onClone = onClone
         super.init(nibName: nil, bundle: nil)
     }
@@ -93,15 +108,10 @@ private final class RepositoryCloneInputPanelController: NSViewController, NSTex
         root.layer?.backgroundColor = NSColor.black.cgColor
         root.layer?.cornerRadius = 18
 
-        let titleLabel = NSTextField(labelWithString: "Clone Public Repositories")
+        let titleLabel = NSTextField(labelWithString: "Clone GitHub Repositories")
         titleLabel.font = .boldSystemFont(ofSize: 22)
         titleLabel.textColor = .white
-        let descriptionLabel = NSTextField(labelWithString: "Enter one public GitHub repository URL per line. Submodules are initialized automatically. Git LFS must be installed for repositories that use it. Private repositories and authentication are not supported yet.")
-        descriptionLabel.font = .systemFont(ofSize: 14)
-        descriptionLabel.textColor = NSColor(white: 0.92, alpha: 1)
-        descriptionLabel.maximumNumberOfLines = 4
-        descriptionLabel.usesSingleLineMode = false
-        descriptionLabel.lineBreakMode = .byWordWrapping
+        let descriptionLabel = makeDescriptionLabel()
 
         let inputContainer = NSView()
         inputContainer.wantsLayer = true
@@ -136,33 +146,28 @@ private final class RepositoryCloneInputPanelController: NSViewController, NSTex
         ]
         textView.textContainerInset = NSSize(width: 10, height: 10)
         textView.delegate = self
-        textView.setAccessibilityLabel("Public GitHub repository URLs")
+        textView.setAccessibilityLabel("GitHub repository URLs")
         scrollView.documentView = textView
         inputContainer.addSubview(scrollView)
 
         let placeholderLabel = TransparentPlaceholderLabel(frame: .zero)
-        placeholderLabel.stringValue = "One public GitHub URL per line"
+        placeholderLabel.stringValue = "One GitHub URL per line"
         placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
         placeholderLabel.textColor = NSColor(white: 0.48, alpha: 1)
         placeholderLabel.font = .systemFont(ofSize: 16)
         placeholderLabel.isSelectable = false
         inputContainer.addSubview(placeholderLabel)
 
-        let errorLabel = NSTextField(labelWithString: "Enter one or more valid public GitHub URLs.")
+        let errorLabel = NSTextField(labelWithString: "Enter one or more valid GitHub repository URLs.")
         errorLabel.translatesAutoresizingMaskIntoConstraints = false
         errorLabel.textColor = NSColor.systemRed
+        errorLabel.maximumNumberOfLines = 3
+        errorLabel.usesSingleLineMode = false
+        errorLabel.lineBreakMode = .byWordWrapping
         errorLabel.font = .systemFont(ofSize: 14)
         errorLabel.isHidden = true
 
-        let cancelButton = PaddedButton(title: "Cancel", target: self, action: #selector(cancel(_:)))
-        let continueButton = PaddedButton(title: "Continue", target: self, action: #selector(`continue`(_:)))
-        styleButton(cancelButton)
-        styleButton(continueButton)
-        continueButton.keyEquivalent = "\r"
-        let buttons = NSStackView(views: [cancelButton, continueButton])
-        buttons.orientation = .horizontal
-        buttons.spacing = 12
-        buttons.translatesAutoresizingMaskIntoConstraints = false
+        let buttons = makeButtonRow()
 
         root.addSubview(titleLabel)
         root.addSubview(descriptionLabel)
@@ -202,9 +207,48 @@ private final class RepositoryCloneInputPanelController: NSViewController, NSTex
         view = root
     }
 
+    private func makeButtonRow() -> NSStackView {
+        let browseButton = PaddedButton(
+            title: "Browse My Repositories…",
+            target: self,
+            action: #selector(browseRepositories(_:))
+        )
+        let cancelButton = PaddedButton(title: "Cancel", target: self, action: #selector(cancel(_:)))
+        let continueButton = PaddedButton(title: "Continue", target: self, action: #selector(`continue`(_:)))
+        styleButton(browseButton)
+        styleButton(cancelButton)
+        styleButton(continueButton)
+        continueButton.keyEquivalent = "\r"
+        let buttons = NSStackView(views: [browseButton, cancelButton, continueButton])
+        buttons.orientation = .horizontal
+        buttons.spacing = 10
+        buttons.translatesAutoresizingMaskIntoConstraints = false
+        self.browseButton = browseButton
+        return buttons
+    }
+
+    private func makeDescriptionLabel() -> NSTextField {
+        let label = NSTextField(
+            labelWithString: "Enter GitHub URLs or browse your repositories. "
+                + "Private repositories require GitHub CLI (`gh`) signed in with `gh auth login` in Terminal."
+        )
+        label.font = .systemFont(ofSize: 14)
+        label.textColor = NSColor(white: 0.92, alpha: 1)
+        label.maximumNumberOfLines = 4
+        label.usesSingleLineMode = false
+        label.lineBreakMode = .byWordWrapping
+        return label
+    }
+
     func startMonitoringOutsideClicks() {
-        outsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            guard let self, let panel = self.panel, panel.isVisible, event.window !== panel else { return event }
+        outsideClickMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] event in
+            guard let self,
+                  !self.isShowingRepositoryPicker,
+                  let panel = self.panel,
+                  panel.isVisible,
+                  event.window !== panel else { return event }
             self.dismiss()
             return event
         }
@@ -228,6 +272,47 @@ private final class RepositoryCloneInputPanelController: NSViewController, NSTex
     @objc private func cancel(_ sender: NSButton) {
         dismiss()
     }
+    @objc private func browseRepositories(_ sender: NSButton) {
+        guard let panel, browseButton?.isEnabled != false else { return }
+        browseGeneration &+= 1
+        let generation = browseGeneration
+        errorLabel?.isHidden = true
+        browseButton?.isEnabled = false
+        browseButton?.title = "Loading…"
+        browseTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                browseTask = nil
+                if generation == browseGeneration {
+                    browseButton?.isEnabled = true
+                    browseButton?.title = "Browse My Repositories…"
+                }
+            }
+            do {
+                let repositories = try await loadRepositories()
+                guard generation == browseGeneration, panel.isVisible else { return }
+                guard !repositories.isEmpty else {
+                    errorLabel?.stringValue = "No repositories are available to this GitHub CLI account."
+                    errorLabel?.isHidden = false
+                    return
+                }
+                isShowingRepositoryPicker = true
+                GitHubRepositoryPicker.present(on: panel, repositories: repositories) { [weak self] selected in
+                    guard let self else { return }
+                    isShowingRepositoryPicker = false
+                    guard generation == browseGeneration, panel.isVisible, let selected else { return }
+                    textView.string = selected.compactMap(\.cloneURL).map(\.absoluteString).joined(separator: "\n")
+                    placeholderLabel?.isHidden = !textView.string.isEmpty
+                    errorLabel?.isHidden = true
+                }
+            } catch {
+                guard generation == browseGeneration, panel.isVisible else { return }
+                errorLabel?.stringValue = String(describing: error)
+                errorLabel?.isHidden = false
+            }
+        }
+    }
+
 
     @objc private func `continue`(_ sender: NSButton) {
         guard let cloneURLs = RepositoryClonePanel.cloneURLs(from: textView.string) else {
@@ -273,6 +358,10 @@ private final class RepositoryCloneInputPanelController: NSViewController, NSTex
     }
 
     private func dismiss() {
+        browseTask?.cancel()
+        browseTask = nil
+        isShowingRepositoryPicker = false
+        browseGeneration &+= 1
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
             self.outsideClickMonitor = nil

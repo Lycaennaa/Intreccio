@@ -3,12 +3,16 @@ import XCTest
 @testable import Intreccio
 
 final class RepositoryCloneTests: XCTestCase {
-    func testPublicCloneURLNormalizesGitHubRemoteForms() throws {
+    func testCloneURLNormalizesGitHubRemoteFormsAndRejectsOtherHosts() {
         XCTAssertEqual(
-            GitHubRepositoryURL.publicCloneURL(from: "git@github.com:octo/repo.git"),
+            GitHubRepositoryURL.cloneURL(from: "git@github.com:octo/repo.git"),
             URL(string: "https://github.com/octo/repo.git")
         )
-        XCTAssertNil(GitHubRepositoryURL.publicCloneURL(from: "https://gitlab.com/octo/repo.git"))
+        XCTAssertEqual(
+            GitHubRepositoryURL.cloneURL(from: "https://github.com/octo/private"),
+            URL(string: "https://github.com/octo/private.git")
+        )
+        XCTAssertNil(GitHubRepositoryURL.cloneURL(from: "https://gitlab.com/octo/repo.git"))
     }
     func testCloneInputAcceptsMultipleURLsAndIgnoresBlankLines() throws {
         let cloneURLs = try XCTUnwrap(
@@ -21,7 +25,7 @@ final class RepositoryCloneTests: XCTestCase {
             cloneURLs,
             [
                 URL(string: "https://github.com/octo/one.git"),
-                URL(string: "https://github.com/octo/two.git"),
+                URL(string: "https://github.com/octo/two.git")
             ]
         )
     }
@@ -32,7 +36,7 @@ final class RepositoryCloneTests: XCTestCase {
         let source = try XCTUnwrap(URL(string: "https://github.com/octo/repo.git"))
 
         let control = ProcessControl()
-        let result = try await GitService(runner: runner).clonePublicRepository(
+        let result = try await GitService(runner: runner).cloneRepository(
             from: source,
             into: parent,
             control: control
@@ -55,6 +59,19 @@ final class RepositoryCloneTests: XCTestCase {
         XCTAssertTrue(receivedControl)
     }
 
+    func testEmptyRepositoryCloneSkipsLFSOperations() async throws {
+        let parent = try makeTestDirectory()
+        let runner = CloneRecordingRunner(hasCommit: false)
+        let source = try XCTUnwrap(URL(string: "https://github.com/octo/empty-private"))
+
+        let result = try await GitService(runner: runner).cloneRepository(from: source, into: parent)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: result.url.appendingPathComponent(".git").path))
+        let invocations = await runner.invocations
+        XCTAssertTrue(invocations.contains(["rev-parse", "--verify", "--quiet", "HEAD"]))
+        XCTAssertFalse(invocations.contains { $0.first == "lfs" })
+    }
+
     func testCloneRejectsExistingDestinationBeforeInvokingGit() async throws {
         let parent = try makeTestDirectory()
         let destination = parent.appendingPathComponent("repo", isDirectory: true)
@@ -63,7 +80,7 @@ final class RepositoryCloneTests: XCTestCase {
         let source = try XCTUnwrap(URL(string: "https://github.com/octo/repo"))
 
         do {
-            _ = try await GitService(runner: runner).clonePublicRepository(from: source, into: parent)
+            _ = try await GitService(runner: runner).cloneRepository(from: source, into: parent)
             XCTFail("Expected destination conflict")
         } catch RepositoryCloneError.destinationExists(let path) {
             XCTAssertEqual(path, destination.path)
@@ -78,7 +95,7 @@ final class RepositoryCloneTests: XCTestCase {
         let source = try XCTUnwrap(URL(string: "https://github.com/octo/repo"))
 
         do {
-            _ = try await GitService(runner: runner).clonePublicRepository(from: source, into: parent)
+            _ = try await GitService(runner: runner).cloneRepository(from: source, into: parent)
             XCTFail("Expected clone failure")
         } catch RepositoryCloneError.cleanupFailed(_, _) {
             XCTFail("Temporary clone cleanup failed")
@@ -109,7 +126,7 @@ final class RepositoryCloneTests: XCTestCase {
         let source = try XCTUnwrap(URL(string: "https://github.com/octo/repo"))
 
         do {
-            _ = try await GitService(runner: runner).clonePublicRepository(from: source, into: parent)
+            _ = try await GitService(runner: runner).cloneRepository(from: source, into: parent)
             XCTFail("Expected Git LFS requirement")
         } catch RepositoryCloneError.gitLFSMissing {
         }
@@ -155,7 +172,7 @@ final class RepositoryCloneTests: XCTestCase {
         let source = try XCTUnwrap(URL(string: "https://github.com/octo/repo"))
 
         do {
-            _ = try await catalog.clonePublicRepository(from: source, into: directory)
+            _ = try await catalog.cloneRepository(from: source, into: directory)
             XCTFail("Expected catalog registration failure")
         } catch StateStoreError.writeBlocked {
         } catch {
@@ -178,12 +195,19 @@ private actor CloneRecordingRunner: ProcessRunning {
     private(set) var invocations: [[String]] = []
     private(set) var streamingInvocations: [[String]] = []
     private(set) var progressEventCount = 0
+    private let hasCommit: Bool
     private(set) var receivedControl = false
 
-    init(fails: Bool = false, lfsAvailable: Bool = true, hasLFSAttributes: Bool = false) {
+    init(
+        fails: Bool = false,
+        lfsAvailable: Bool = true,
+        hasLFSAttributes: Bool = false,
+        hasCommit: Bool = true
+    ) {
         self.fails = fails
         self.lfsAvailable = lfsAvailable
         self.hasLFSAttributes = hasLFSAttributes
+        self.hasCommit = hasCommit
     }
     func executeStreaming(
         repository: URL?,
@@ -230,6 +254,9 @@ private actor CloneRecordingRunner: ProcessRunning {
                 withIntermediateDirectories: true
             )
             return recordedGitResult()
+        }
+        if arguments == ["rev-parse", "--verify", "--quiet", "HEAD"] {
+            return recordedGitResult(output: hasCommit ? "0123456789abcdef\n" : "", exitCode: hasCommit ? 0 : 1)
         }
         if arguments.first == "rev-parse", let repository {
             return recordedGitResult(output: "\(repository.path)\n")

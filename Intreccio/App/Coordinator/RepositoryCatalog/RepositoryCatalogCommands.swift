@@ -527,7 +527,7 @@ final class RepositoryCatalog {
         }
     }
 
-    func clonePublicRepository(
+    func cloneRepository(
         from sourceURL: URL,
         into destinationParent: URL,
         control: ProcessControl? = nil,
@@ -536,7 +536,7 @@ final class RepositoryCatalog {
         try await executeCommand { [weak self] in
             guard let self else { throw CancellationError() }
             let state = try sourceCommandState()
-            let receipt = try await gitService.clonePublicRepository(
+            let receipt = try await gitService.cloneRepository(
                 from: sourceURL,
                 into: destinationParent,
                 control: control,
