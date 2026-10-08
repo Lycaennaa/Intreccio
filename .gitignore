@@ -2,6 +2,7 @@
 .DS_Store
 
 # Xcode user and build data
+Intreccio.xcodeproj/
 xcuserdata/
 *.xcuserstate
 DerivedData/
@@ -17,3 +18,5 @@ dist/
 /t3code/
 /.kilo/
 /To-Do.txt
+*.txt
+*.pyc

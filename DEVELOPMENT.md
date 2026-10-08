@@ -24,7 +24,7 @@ just setup
 
 ## Xcode project
 
-`project.yml` is the source of truth. `Intreccio.xcodeproj` is generated; never hand-edit its `project.pbxproj`. Build and test recipes regenerate the project automatically.
+`project.yml` is the XcodeGen source of truth. XcodeGen creates `Intreccio.xcodeproj`; never hand-edit generated project files. Build and test recipes generate the project automatically.
 
 There are no checked-in SwiftPM `Package.resolved` files. `scripts/check-package-locks.py` keeps the empty lockfile list explicit; update it if Swift packages are added.
 
@@ -52,7 +52,7 @@ just ci
 just lint-fix
 ```
 
-`just check` verifies generated-project consistency, Xcode metadata, Swift package lock configuration, SwiftLint against the checked-in baseline, and both XCTest targets. New lint findings fail the strict check. `just ci` also verifies the local Xcode version and builds the Release configuration. GitHub Actions uses native commands in `.github/workflows/ci.yml` rather than Just or Distill.
+`just check` generates the project from `project.yml`, validates Xcode metadata and Swift package lock configuration, runs SwiftLint against the checked-in baseline, and runs both XCTest targets. New lint findings fail the strict check. `just ci` also verifies the local Xcode version and builds the Release configuration. GitHub Actions uses native commands in `.github/workflows/ci.yml` rather than Just or Distill.
 
 `just lint-fix` applies SwiftLint autocorrections, then reruns the strict baseline check. Review source changes before keeping them.
 

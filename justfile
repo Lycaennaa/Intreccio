@@ -38,9 +38,9 @@
     if command -v distill >/dev/null 2>&1; then distill swift lint -- --config .swiftlint.yml --fix --lenient; else swiftlint lint --config .swiftlint.yml --fix --lenient; fi
     just lint
 
-@check: check-generated-project check-tooling check-pbx lint test
+@check: check-project check-tooling check-project-metadata lint test
 
-@ci: check-ci-toolchain check-generated-project check-tooling check-pbx lint test build-release
+@ci: check-ci-toolchain check-project check-tooling check-project-metadata lint test build-release
 
 @run: build
     open .build/derived-data/Build/Products/Debug/Intreccio.app
@@ -70,24 +70,12 @@
     swift --version
     python3 --version
 
-@check-generated-project:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p .build
-    project_file="Intreccio.xcodeproj/project.pbxproj"
-    original_project="$(mktemp .build/project.pbxproj.XXXXXX)"
-    cp "$project_file" "$original_project"
-    trap 'rm -f "$original_project"' EXIT
-    xcodegen generate --spec project.yml
-    if ! cmp -s "$original_project" "$project_file"; then
-        diff -u "$original_project" "$project_file" || true
-        printf 'Generated project was out of date; review the regenerated project file\n' >&2
-        exit 1
-    fi
+@check-project: generate-project
+    test -f "Intreccio.xcodeproj/project.pbxproj"
 
 @check-tooling:
     python3 -B scripts/check-package-locks.py
 
-@check-pbx:
-    python3 -B scripts/check-pbx-identifiers.py
+@check-project-metadata:
+    python3 -B scripts/check-project-metadata.py
 

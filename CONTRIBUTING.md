@@ -4,7 +4,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for source setup, builds, and checks.
 
 ## Workflow
 
-Use GitHub Issues to discuss a bug or proposed change, then open a pull request with a focused diff. Keep generated Xcode project changes reproducible from `project.yml`; never hand-edit `Intreccio.xcodeproj/project.pbxproj`.
+Use GitHub Issues to discuss a bug or proposed change, then open a pull request with a focused diff. Keep Xcode project settings in `project.yml`; build and test recipes generate `Intreccio.xcodeproj` when needed. Never hand-edit the generated project.
 
 ## Pull requests
 

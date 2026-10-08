@@ -15,6 +15,9 @@ PBX_ASSIGNMENT = re.compile(
 XCCONFIG_ASSIGNMENT = re.compile(
     r'^\s*(?P<key>"?[A-Za-z_][A-Za-z0-9_]*(?:\[[^]]+\])?"?)\s*=\s*(?P<value>.*?)\s*$'
 )
+YAML_ASSIGNMENT = re.compile(
+    r'^\s*(?P<key>"?[A-Za-z_][A-Za-z0-9_]*(?:\[[^]]+\])?"?)\s*:\s*(?P<value>.*?)\s*$'
+)
 VARIABLE = re.compile(r'^"?\$\([A-Za-z_][A-Za-z0-9_]*\)"?$')
 PRIVATE_PATH = re.compile(r'/(?:Users|private/var|Volumes|var/folders)/')
 
@@ -111,7 +114,8 @@ def check_file(root, path, mode):
         return check_xml_file(root, path)
 
     failures = []
-    assignment = None if path.suffix in {".yml", ".yaml"} else (
+    assignment = (
+        YAML_ASSIGNMENT if path.suffix in {".yml", ".yaml"} else
         XCCONFIG_ASSIGNMENT if path.suffix == ".xcconfig" else PBX_ASSIGNMENT
     )
     for line_number, line in enumerate(indexed_contents(root, path).splitlines(), 1):

@@ -98,7 +98,7 @@ jobs:
           swift --version
           python3 --version
 
-      - name: Generate and verify Xcode project
+      - name: Generate Xcode project
         shell: bash
         run: |
           set -euo pipefail
@@ -106,14 +106,13 @@ jobs:
             HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
           fi
           xcodegen generate --spec project.yml
-          git diff --exit-code -- Intreccio.xcodeproj
 
       - name: Validate repository tooling
         shell: bash
         run: |
           set -euo pipefail
           python3 -B scripts/check-package-locks.py
-          python3 -B scripts/check-pbx-identifiers.py
+          python3 -B scripts/check-project-metadata.py
 
       - name: Install SwiftLint
         shell: bash
