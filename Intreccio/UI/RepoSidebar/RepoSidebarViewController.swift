@@ -1,7 +1,11 @@
 import AppKit
 
 @MainActor
-final class RepoSidebarViewController: NSViewController, NSOutlineViewDataSource, NSOutlineViewDelegate, NSSearchFieldDelegate, NSMenuDelegate {
+final class RepoSidebarViewController: NSViewController,
+    NSOutlineViewDataSource,
+    NSOutlineViewDelegate,
+    NSSearchFieldDelegate,
+    NSMenuDelegate {
     struct TreeCacheKey: Equatable {
         let searchText: String
         let repositories: [RepoDescriptor]
@@ -46,6 +50,7 @@ final class RepoSidebarViewController: NSViewController, NSOutlineViewDataSource
     let githubMenuController: RepoSidebarGitHubMenuController
     let applicationController: RepoSidebarApplicationController
     let outlineView = NSOutlineView()
+    var isSynchronizingSelection = false
     let searchField = NSSearchField()
     let errorLabel = NSTextField(wrappingLabelWithString: "")
     let emptyLabel = NSTextField(labelWithString: "Add a folder or repository to begin.")
@@ -137,18 +142,7 @@ final class RepoSidebarViewController: NSViewController, NSOutlineViewDataSource
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("Repository"))
         column.title = "Repositories"
-        outlineView.addTableColumn(column)
-        outlineView.outlineTableColumn = column
-        outlineView.indentationPerLevel = 0
-        outlineView.headerView = nil
-        outlineView.backgroundColor = .black
-        outlineView.rowSizeStyle = .medium
-        outlineView.selectionHighlightStyle = .regular
-        outlineView.allowsMultipleSelection = true
-        outlineView.focusRingType = .none
-        outlineView.dataSource = self
-        outlineView.delegate = self
-        outlineView.setAccessibilityLabel("Repository sources")
+        configureOutlineView(column)
 
         let menu = NSMenu()
         menu.delegate = self
@@ -186,6 +180,20 @@ final class RepoSidebarViewController: NSViewController, NSOutlineViewDataSource
         ])
         view = container
         reload()
+    }
+    private func configureOutlineView(_ column: NSTableColumn) {
+        outlineView.addTableColumn(column)
+        outlineView.outlineTableColumn = column
+        outlineView.indentationPerLevel = 0
+        outlineView.headerView = nil
+        outlineView.backgroundColor = .black
+        outlineView.rowSizeStyle = .medium
+        outlineView.selectionHighlightStyle = .regular
+        outlineView.allowsMultipleSelection = true
+        outlineView.focusRingType = .none
+        outlineView.dataSource = self
+        outlineView.delegate = self
+        outlineView.setAccessibilityLabel("Repository sources")
     }
 
 }

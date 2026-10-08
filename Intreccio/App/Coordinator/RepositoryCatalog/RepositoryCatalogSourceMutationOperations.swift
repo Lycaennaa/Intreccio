@@ -5,25 +5,26 @@ final class RepositoryCatalogSourceMutationOperations {
     private let catalogState: RepositoryCatalogState
     private let bookmarkStore: BookmarkStore
     private let gitService: GitService
+    private let sourceResolver: RepositorySourceResolver
     private let lifecycle: RepositoryCatalogLifecycle
     private let sourceScanner: RepositoryCatalogSourceScanner
-
     init(
         catalogState: RepositoryCatalogState,
         bookmarkStore: BookmarkStore,
         gitService: GitService,
+        sourceResolver: RepositorySourceResolver,
         lifecycle: RepositoryCatalogLifecycle,
         sourceScanner: RepositoryCatalogSourceScanner
     ) {
         self.catalogState = catalogState
         self.bookmarkStore = bookmarkStore
         self.gitService = gitService
+        self.sourceResolver = sourceResolver
         self.lifecycle = lifecycle
         self.sourceScanner = sourceScanner
     }
-
     var sourceScans: [UUID: RepoScanResult] { catalogState.sourceScans }
-    var standaloneURLs: [UUID: URL] { catalogState.standaloneURLs }
+    var standaloneRepositories: [UUID: StandaloneRepositoryLocation] { catalogState.standaloneRepositories }
     var repositories: [RepoDescriptor] { catalogState.repositories }
     var scanMessages: [UUID: String] { catalogState.scanMessages }
 
@@ -104,6 +105,8 @@ final class RepositoryCatalogSourceMutationOperations {
         }) {
             return .selectedRepository(existing.id)
         }
+        let gitDirectoryInfo = await sourceResolver.inspectGitDirectory(at: root)
+        guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
         let bookmark = try await bookmarkStore.create(for: root)
         let source = StandaloneRepository(
             id: UUID(),
@@ -114,11 +117,14 @@ final class RepositoryCatalogSourceMutationOperations {
         )
         var proposed = state
         proposed.standaloneRepos.append(source)
-        var urls = standaloneURLs
-        urls[source.id] = root
+        var standaloneRepositories = self.standaloneRepositories
+        standaloneRepositories[source.id] = StandaloneRepositoryLocation(
+            url: root,
+            gitDirectoryInfo: gitDirectoryInfo
+        )
         let change = catalogState.makeChange(
             state: proposed,
-            standaloneURLs: urls,
+            standaloneRepositories: standaloneRepositories,
             effect: .sourceAdded()
         )
         return .changed(CatalogTransaction(change: change, persistenceOrder: .beforeAcceptance))
@@ -131,15 +137,15 @@ final class RepositoryCatalogSourceMutationOperations {
         proposed.watchRoots.removeAll { $0.id == sourceID }
         proposed.standaloneRepos.removeAll { $0.id == sourceID }
         var scans = sourceScans
-        var urls = standaloneURLs
+        var repositories = standaloneRepositories
         var messages = scanMessages
         scans[sourceID] = nil
-        urls[sourceID] = nil
+        repositories[sourceID] = nil
         messages[sourceID] = nil
         let provisional = catalogState.makeChange(
             state: proposed,
             sourceScans: scans,
-            standaloneURLs: urls,
+            standaloneRepositories: repositories,
             scanMessages: messages,
             effect: .sourceRemoved(sourceID: sourceID, removedRepositoryIDs: [])
         )
@@ -244,25 +250,40 @@ final class RepositoryCatalogSourceMutationOperations {
         let bookmark = try await bookmarkStore.create(for: url)
         guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
         var proposed = state
+        var standaloneRepositories = self.standaloneRepositories
         if let index = proposed.watchRoots.firstIndex(where: { $0.id == sourceID }) {
             proposed.watchRoots[index].bookmarkData = bookmark
             proposed.watchRoots[index].lastResolvedPath = url.path
             proposed.watchRoots[index].displayName = url.lastPathComponent
             proposed.watchRoots[index].resourceID = ResourceIdentity.read(from: url)
         } else if let index = proposed.standaloneRepos.firstIndex(where: { $0.id == sourceID }) {
-            guard RepositoryPathPolicy.isRealDirectory(url.appendingPathComponent(".git", isDirectory: true)),
-                  try await gitService.repositoryRoot(at: url) == url else {
+            guard RepositoryPathPolicy.isRealDirectory(url.appendingPathComponent(".git", isDirectory: true)) else {
                 throw CoordinatorError.invalidRepository("Select the repository top-level folder.")
             }
+            let repositoryRoot = try await gitService.repositoryRoot(at: url)
+            guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
+            guard repositoryRoot == url else {
+                throw CoordinatorError.invalidRepository("Select the repository top-level folder.")
+            }
+            let gitDirectoryInfo = await sourceResolver.inspectGitDirectory(at: repositoryRoot)
+            guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
             proposed.standaloneRepos[index].bookmarkData = bookmark
             proposed.standaloneRepos[index].lastResolvedPath = url.path
             proposed.standaloneRepos[index].displayName = url.lastPathComponent
             proposed.standaloneRepos[index].resourceID = ResourceIdentity.read(from: url)
+            standaloneRepositories[sourceID] = StandaloneRepositoryLocation(
+                url: repositoryRoot,
+                gitDirectoryInfo: gitDirectoryInfo
+            )
         } else {
             return .noChange
         }
         guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
-        let change = catalogState.makeChange(state: proposed, effect: .sourceReauthorized)
+        let change = catalogState.makeChange(
+            state: proposed,
+            standaloneRepositories: standaloneRepositories,
+            effect: .sourceReauthorized
+        )
         return .changed(CatalogTransaction(change: change, persistenceOrder: .beforeAcceptance))
     }
 

@@ -9,7 +9,7 @@ final class RepositoryCatalogRefactorTests: XCTestCase {
         return CatalogChange(
             state: PersistedState(),
             sourceScans: [:],
-            standaloneURLs: [:],
+            standaloneRepositories: [:],
             repositories: [],
             scanMessages: [repositoryID: message],
             effect: effect

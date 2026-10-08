@@ -46,7 +46,7 @@ extension RepositoryCatalogRefactorTests {
                 visitedDirectoryCount: count,
                 duration: .zero
             )],
-            standaloneURLs: [:]
+            standaloneRepositories: [:]
         )
         let expectedIndices = (0..<count).sorted {
             "/large/repository-\($0)".localizedStandardCompare("/large/repository-\($1)") == .orderedAscending

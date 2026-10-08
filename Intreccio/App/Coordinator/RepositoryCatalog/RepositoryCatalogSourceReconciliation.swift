@@ -6,6 +6,7 @@ final class RepositoryCatalogSourceReconciliation {
     private let lifecycle: RepositoryCatalogLifecycle
     private let generation: RepositoryCatalogGeneration
     private let sourceScanner: RepositoryCatalogSourceScanner
+    private let sourceResolver: RepositorySourceResolver
     private let standaloneResolver: RepositoryCatalogStandaloneResolver
 
     init(
@@ -13,17 +14,19 @@ final class RepositoryCatalogSourceReconciliation {
         lifecycle: RepositoryCatalogLifecycle,
         generation: RepositoryCatalogGeneration,
         sourceScanner: RepositoryCatalogSourceScanner,
+        sourceResolver: RepositorySourceResolver,
         standaloneResolver: RepositoryCatalogStandaloneResolver
     ) {
         self.catalogState = catalogState
         self.lifecycle = lifecycle
         self.generation = generation
         self.sourceScanner = sourceScanner
+        self.sourceResolver = sourceResolver
         self.standaloneResolver = standaloneResolver
     }
 
     var sourceScans: [UUID: RepoScanResult] { catalogState.sourceScans }
-    var standaloneURLs: [UUID: URL] { catalogState.standaloneURLs }
+    var standaloneRepositories: [UUID: StandaloneRepositoryLocation] { catalogState.standaloneRepositories }
     var repositories: [RepoDescriptor] { catalogState.repositories }
     var scanMessages: [UUID: String] { catalogState.scanMessages }
 
@@ -36,7 +39,7 @@ final class RepositoryCatalogSourceReconciliation {
         guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
         let previousRepositories = Dictionary(uniqueKeysWithValues: repositories.map { ($0.id, $0) })
         var scans: [UUID: RepoScanResult] = [:]
-        var urls: [UUID: URL] = [:]
+        var standaloneRepositories: [UUID: StandaloneRepositoryLocation] = [:]
         var proposed = state
         var messages: [UUID: String] = [:]
 
@@ -72,9 +75,12 @@ final class RepositoryCatalogSourceReconciliation {
         for (index, resolution) in standaloneResolutions.enumerated() {
             let source = proposed.standaloneRepos[index]
             switch resolution {
-            case .resolved(let resolvedSource, let root):
+            case .resolved(let resolvedSource, let root, let gitDirectoryInfo):
                 proposed.standaloneRepos[index] = resolvedSource
-                urls[source.id] = root
+                standaloneRepositories[source.id] = StandaloneRepositoryLocation(
+                    url: root,
+                    gitDirectoryInfo: gitDirectoryInfo
+                )
             case .repositoryUnavailable(let resolvedSource, let message):
                 proposed.standaloneRepos[index] = resolvedSource
                 messages[source.id] = "Repository unavailable: \(message)"
@@ -84,6 +90,14 @@ final class RepositoryCatalogSourceReconciliation {
             }
         }
 
+        let snapshotGitDirectoryInfos = try await resolveSnapshotGitDirectoryInfos(
+            state: proposed,
+            sourceScans: scans,
+            standaloneRepositories: standaloneRepositories,
+            previousRepositories: Array(previousRepositories.values),
+            generation: generation
+        )
+
         guard !Task.isCancelled,
               !lifecycle.isShuttingDown,
               generation == nil || generation.map(self.generation.isCurrentFullRescan) == true else {
@@ -92,8 +106,9 @@ final class RepositoryCatalogSourceReconciliation {
         let provisional = catalogState.makeChange(
             state: proposed,
             sourceScans: scans,
-            standaloneURLs: urls,
+            standaloneRepositories: standaloneRepositories,
             scanMessages: messages,
+            snapshotGitDirectoryInfos: snapshotGitDirectoryInfos,
             effect: .restored(
                 changedRepositoryIDs: [],
                 refreshUpstream: refreshUpstream,
@@ -123,6 +138,30 @@ final class RepositoryCatalogSourceReconciliation {
             change: change,
             persistenceOrder: .afterAcceptance(clearPersistenceErrorOnSuccess: true)
         )
+    }
+
+    private func resolveSnapshotGitDirectoryInfos(
+        state: PersistedState,
+        sourceScans: [UUID: RepoScanResult],
+        standaloneRepositories: [UUID: StandaloneRepositoryLocation],
+        previousRepositories: [RepoDescriptor],
+        generation: UInt64?
+    ) async throws -> [UUID: GitDirectoryInfo] {
+        let snapshots = RepositoryCatalogRebuilder.snapshotsNeedingGitDirectoryInfo(
+            state: state,
+            sourceScans: sourceScans,
+            standaloneRepositories: standaloneRepositories,
+            previousRepositories: previousRepositories
+        )
+        var metadata: [UUID: GitDirectoryInfo] = [:]
+        for snapshot in snapshots {
+            guard isCurrentFullRescan(generation) else { throw CancellationError() }
+            let url = URL(fileURLWithPath: snapshot.canonicalPath, isDirectory: true)
+            let gitDirectoryInfo = await sourceResolver.inspectGitDirectory(at: url)
+            guard isCurrentFullRescan(generation) else { throw CancellationError() }
+            if let gitDirectoryInfo { metadata[snapshot.id] = gitDirectoryInfo }
+        }
+        return metadata
     }
 
     func prepareRescanSource(
@@ -206,20 +245,20 @@ final class RepositoryCatalogSourceReconciliation {
         guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
         guard let index = state.standaloneRepos.firstIndex(where: { $0.id == sourceID }) else { return nil }
         var proposed = state
-        var urls = standaloneURLs
+        var locations = standaloneRepositories
         var message: String?
         let resolution = try await standaloneResolver.resolveStandalone(proposed.standaloneRepos[index])
         switch resolution {
-        case .resolved(let source, let root):
+        case .resolved(let source, let root, let gitDirectoryInfo):
             proposed.standaloneRepos[index] = source
-            urls[sourceID] = root
+            locations[sourceID] = StandaloneRepositoryLocation(url: root, gitDirectoryInfo: gitDirectoryInfo)
         case .repositoryUnavailable(let source, let diagnostic):
             proposed.standaloneRepos[index] = source
-            urls[sourceID] = nil
+            locations[sourceID] = nil
             message = "Repository unavailable: \(diagnostic)"
         case .accessUnavailable(let source, let diagnostic):
             proposed.standaloneRepos[index] = source
-            urls[sourceID] = nil
+            locations[sourceID] = nil
             message = "Access unavailable: \(diagnostic)"
         }
 
@@ -230,7 +269,7 @@ final class RepositoryCatalogSourceReconciliation {
         messages[sourceID] = message
         let provisional = catalogState.makeChange(
             state: proposed,
-            standaloneURLs: urls,
+            standaloneRepositories: locations,
             scanMessages: messages,
             effect: .sourceRescanned(changedRepositoryIDs: [])
         )

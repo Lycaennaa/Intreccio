@@ -323,6 +323,47 @@ extension AppShellTests {
     }
 
     @MainActor
+    func testHistoryContentSwitchRestoresDiffInspector() throws {
+        let directory = try makeTestDirectory()
+        let coordinator = AppCoordinator(
+            stateStore: StateStore(fileURL: directory.appendingPathComponent("state.json"))
+        )
+        coordinator.setMode(.history)
+        let windowController = MainWindowController(coordinator: coordinator)
+        let window = try XCTUnwrap(windowController.window)
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil) }
+        let contentController = windowController.contentController
+        contentController.refresh(coordinator.snapshot)
+        let detailController = try XCTUnwrap(contentController.splitViewItems.last?.viewController)
+        let header = try XCTUnwrap(
+            allDescendantViews(in: contentController.view).compactMap { $0 as? HistoryHeaderView }.first
+        )
+        XCTAssertTrue(detailController.children.first is DiffInspectorViewController)
+
+        header.contentControl.selectedSegment = 1
+        let contentAction = try XCTUnwrap(header.contentControl.action)
+        XCTAssertTrue(
+            NSApplication.shared.sendAction(
+                contentAction,
+                to: header.contentControl.target,
+                from: header.contentControl
+            )
+        )
+        XCTAssertTrue(detailController.children.first is BranchFileInspectorViewController)
+
+        header.contentControl.selectedSegment = 0
+        XCTAssertTrue(
+            NSApplication.shared.sendAction(
+                contentAction,
+                to: header.contentControl.target,
+                from: header.contentControl
+            )
+        )
+        XCTAssertTrue(detailController.children.first is DiffInspectorViewController)
+    }
+
+    @MainActor
     func testQuitDuringMutationPresentsWaitAndCancelActionsAtRuntime() throws {
         let directory = try makeTestDirectory()
         let coordinator = AppCoordinator(

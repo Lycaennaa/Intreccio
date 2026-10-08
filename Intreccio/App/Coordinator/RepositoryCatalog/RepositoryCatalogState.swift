@@ -18,7 +18,7 @@ struct CatalogRepositoryFilter: Sendable, Equatable {
 @MainActor
 final class RepositoryCatalogState {
     private(set) var sourceScans: [UUID: RepoScanResult] = [:]
-    private(set) var standaloneURLs: [UUID: URL] = [:]
+    private(set) var standaloneRepositories: [UUID: StandaloneRepositoryLocation] = [:]
     private(set) var repositories: [RepoDescriptor] = []
     private(set) var repositoryIndex: RepositoryCatalogIndex
     private(set) var scanMessages: [UUID: String] = [:]
@@ -32,17 +32,20 @@ final class RepositoryCatalogState {
     func makeChange(
         state: PersistedState,
         sourceScans: [UUID: RepoScanResult]? = nil,
-        standaloneURLs: [UUID: URL]? = nil,
+        standaloneRepositories: [UUID: StandaloneRepositoryLocation]? = nil,
         scanMessages: [UUID: String]? = nil,
+        snapshotGitDirectoryInfos: [UUID: GitDirectoryInfo] = [:],
         effect: CatalogEffectPlan,
         repositoryFilter: CatalogRepositoryFilter? = nil
     ) -> CatalogChange {
         let scans = sourceScans ?? self.sourceScans
-        let urls = standaloneURLs ?? self.standaloneURLs
+        let standaloneRepositories = standaloneRepositories ?? self.standaloneRepositories
         let rebuilt = RepositoryCatalogRebuilder.rebuild(
             state: state,
             sourceScans: scans,
-            standaloneURLs: urls
+            standaloneRepositories: standaloneRepositories,
+            previousRepositories: self.repositories,
+            snapshotGitDirectoryInfos: snapshotGitDirectoryInfos
         )
         var repositories = rebuilt.repositories
         if let repositoryFilter {
@@ -58,7 +61,7 @@ final class RepositoryCatalogState {
         return CatalogChange(
             state: persisted,
             sourceScans: scans,
-            standaloneURLs: urls,
+            standaloneRepositories: standaloneRepositories,
             repositories: repositories,
             scanMessages: scanMessages ?? self.scanMessages,
             effect: effect
@@ -67,7 +70,7 @@ final class RepositoryCatalogState {
 
     func accept(_ change: CatalogChange) {
         sourceScans = change.sourceScans
-        standaloneURLs = change.standaloneURLs
+        standaloneRepositories = change.standaloneRepositories
         repositories = change.repositories
         repositoryIndex = RepositoryCatalogIndex(repositories: repositories)
         scanMessages = change.scanMessages

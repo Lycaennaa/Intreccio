@@ -297,7 +297,7 @@ final class RepositoryCatalog {
     }
 
     var sourceScans: [UUID: RepoScanResult] { state.sourceScans }
-    var standaloneURLs: [UUID: URL] { state.standaloneURLs }
+    var standaloneRepositories: [UUID: StandaloneRepositoryLocation] { state.standaloneRepositories }
     var repositories: [RepoDescriptor] { state.repositories }
     var repositoryIndex: RepositoryCatalogIndex { state.repositoryIndex }
     var scanMessages: [UUID: String] { state.scanMessages }

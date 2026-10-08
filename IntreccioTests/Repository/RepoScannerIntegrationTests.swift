@@ -12,9 +12,30 @@ final class RepoScannerIntegrationTests: XCTestCase {
         let result = try await RepoScanner().scan(root: root, exclusions: [])
 
         XCTAssertEqual(result.repositories.map(\.canonicalURL), [root.resolvingSymlinksInPath().standardizedFileURL])
+        XCTAssertEqual(result.repositories.first?.gitDirectoryInfo, GitDirectoryInfo.read(at: root))
         XCTAssertNil(result.incompleteReason)
         XCTAssertGreaterThanOrEqual(result.visitedDirectoryCount, 1)
         XCTAssertGreaterThanOrEqual(result.duration, .zero)
+    }
+
+    func testGitDirectoryInfoRejectsOversizedMarkerFiles() throws {
+        let root = try makeTestDirectory()
+        let markerRoot = root.appendingPathComponent("oversized-marker", isDirectory: true)
+        try FileManager.default.createDirectory(at: markerRoot, withIntermediateDirectories: true)
+        var oversizedGitMarker = Data("gitdir: ".utf8)
+        oversizedGitMarker.append(Data(repeating: 0x61, count: 8_192))
+        try oversizedGitMarker.write(to: markerRoot.appendingPathComponent(".git"))
+        XCTAssertNil(GitDirectoryInfo.read(at: markerRoot))
+
+        let linkedRoot = root.appendingPathComponent("linked", isDirectory: true)
+        try FileManager.default.createDirectory(at: linkedRoot, withIntermediateDirectories: true)
+        let linkedGitDirectory = root.appendingPathComponent(".git/worktrees/linked", isDirectory: true)
+        try FileManager.default.createDirectory(at: linkedGitDirectory, withIntermediateDirectories: true)
+        try Data("gitdir: \(linkedGitDirectory.path)\n".utf8)
+            .write(to: linkedRoot.appendingPathComponent(".git"))
+        try Data(repeating: 0x61, count: 8_192)
+            .write(to: linkedGitDirectory.appendingPathComponent("commondir"))
+        XCTAssertNil(GitDirectoryInfo.read(at: linkedRoot))
     }
 
     func testScanFindsVisibleNestedReposAndSkipsHiddenSymlinkAndExcludedPaths() async throws {
@@ -183,8 +204,8 @@ private actor BlockingGitRunner: ProcessRunning {
         priority: ProcessPriority,
         progress: @escaping @Sendable (ProcessOutputStream, Data) -> Void,
         control: ProcessControl?
-    ) async throws -> ProcessCommandResult {
-        try await execute(
+    ) async -> ProcessCommandResult {
+        await execute(
             repository: repository,
             arguments: arguments,
             input: input,

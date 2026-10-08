@@ -255,7 +255,7 @@ extension RepositoryRuntimeControllerTests {
         let change = CatalogChange(
             state: delegate.state,
             sourceScans: [:],
-            standaloneURLs: [:],
+            standaloneRepositories: [:],
             repositories: [first, changedSecond],
             scanMessages: [:],
             effect: fullReconciliationEffect

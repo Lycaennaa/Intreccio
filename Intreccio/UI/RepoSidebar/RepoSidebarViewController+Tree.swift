@@ -3,18 +3,37 @@ import UniformTypeIdentifiers
 
 @MainActor
 extension RepoSidebarViewController {
+    private struct FolderLevelEnvironment {
+        let sourceID: UUID
+        let sourceURL: URL
+        let snapshot: AppSnapshot
+    }
     func reload(_ snapshot: AppSnapshot? = nil) {
         guard isViewLoaded else { return }
         let selectedRepositoryIDsBeforeReload = repositoryIDs(in: outlineView.selectedRowIndexes)
         let snapshot = snapshot ?? coordinator.snapshot
+        updateStatusLabels(snapshot)
+        guard updateTree(snapshot) else { return }
+        restoreSelection(selectedRepositoryIDsBeforeReload, snapshot: snapshot)
+    }
+
+    private func updateStatusLabels(_ snapshot: AppSnapshot) {
         searchField.stringValue = snapshot.state.uiState.searchText
         let banner = snapshot.errorMessage ?? snapshot.statusMessage
         errorLabel.stringValue = banner ?? ""
         errorLabel.textColor = snapshot.errorMessage == nil ? .systemOrange : .systemRed
         errorLabel.isHidden = banner == nil
-        emptyLabel.isHidden = !snapshot.state.watchRoots.isEmpty || !snapshot.state.standaloneRepos.isEmpty
+        let hasVisibleStandalone = sidebarVisibleRepositories(
+            snapshot.repositories,
+            matchingQuery: ""
+        ).contains { repository in
+            if case .standalone = repository.source { return true }
+            return false
+        }
+        emptyLabel.isHidden = !snapshot.state.watchRoots.isEmpty || hasVisibleStandalone
+    }
 
-        var synchronizeSelection = false
+    private func updateTree(_ snapshot: AppSnapshot) -> Bool {
         switch snapshot.sidebarUpdate {
         case .structural:
             let treeKey = makeTreeCacheKey(snapshot)
@@ -23,33 +42,34 @@ extension RepoSidebarViewController {
             } else {
                 updateBadgesForAllRepositories(snapshot)
             }
-            synchronizeSelection = true
-
+            return true
         case .repositoryBadge(let repositoryID):
-            if treeCacheKey == nil {
-                let treeKey = makeTreeCacheKey(snapshot)
-                rebuildTree(snapshot, cacheKey: treeKey)
-                synchronizeSelection = true
-            } else {
-                updateBadge(for: repositoryID, snapshot: snapshot)
+            guard treeCacheKey != nil else {
+                rebuildTree(snapshot, cacheKey: makeTreeCacheKey(snapshot))
+                return true
             }
-
+            updateBadge(for: repositoryID, snapshot: snapshot)
+            return false
         case .none:
-            if treeCacheKey == nil {
-                let treeKey = makeTreeCacheKey(snapshot)
-                rebuildTree(snapshot, cacheKey: treeKey)
-                synchronizeSelection = true
-            }
+            guard treeCacheKey == nil else { return false }
+            rebuildTree(snapshot, cacheKey: makeTreeCacheKey(snapshot))
+            return true
         }
+    }
 
-        guard synchronizeSelection else { return }
-        let candidateIDs: [UUID]
-        if selectedRepositoryIDsBeforeReload.isEmpty {
-            candidateIDs = snapshot.state.uiState.selectedRepoID.map { [$0] } ?? []
+    private func restoreSelection(_ selectedRepositoryIDsBeforeReload: [UUID], snapshot: AppSnapshot) {
+        let previousRows = selectedRepositoryIDsBeforeReload.compactMap { repositoryID in
+            sidebarSelectionRepositoryID(for: repositoryID, snapshot: snapshot)
+        }.compactMap { row(for: $0) }
+        let rows: [Int]
+        if !previousRows.isEmpty {
+            rows = previousRows
+        } else if let selectedID = snapshot.state.uiState.selectedRepoID {
+            let repositoryID = sidebarSelectionRepositoryID(for: selectedID, snapshot: snapshot) ?? selectedID
+            rows = row(for: repositoryID).map { [$0] } ?? []
         } else {
-            candidateIDs = selectedRepositoryIDsBeforeReload
+            rows = []
         }
-        let rows = candidateIDs.compactMap { row(for: $0) }
         guard !rows.isEmpty else {
             outlineView.deselectAll(nil)
             return
@@ -60,11 +80,11 @@ extension RepoSidebarViewController {
                   case .repository(let id) = node.kind else { return nil }
             return id
         }
-        if currentIDs != restoredIDs {
-            outlineView.selectRowIndexes(IndexSet(rows), byExtendingSelection: false)
-        }
+        guard currentIDs != restoredIDs else { return }
+        isSynchronizingSelection = true
+        outlineView.selectRowIndexes(IndexSet(rows), byExtendingSelection: false)
+        isSynchronizingSelection = false
     }
-
     func makeTreeCacheKey(_ snapshot: AppSnapshot) -> TreeCacheKey {
         TreeCacheKey(
             searchText: snapshot.state.uiState.searchText.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -137,8 +157,8 @@ extension RepoSidebarViewController {
     func outlineView(_ outlineView: NSOutlineView, isGroupItem item: Any) -> Bool {
         guard let node = item as? Node else { return false }
         return switch node.kind {
-            case .root, .folder, .repository: false
-            case .pinnedSection, .standaloneSection: true
+        case .root, .folder, .repository: false
+        case .pinnedSection, .standaloneSection: true
         }
     }
 
@@ -179,18 +199,19 @@ extension RepoSidebarViewController {
             titleStack.trailingAnchor.constraint(lessThanOrEqualTo: badge.leadingAnchor, constant: -8),
             titleStack.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             badge.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
-            badge.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            badge.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
         ])
         cell.toolTip = node.subtitle
         let accessibilityStatus = [isFolder ? "Folder" : nil, node.badge, node.subtitle]
-            .compactMap { $0 }
+            .compactMap(\.self)
             .joined(separator: ", ")
         cell.setAccessibilityLabel(accessibilityStatus.isEmpty ? node.title : "\(node.title), \(accessibilityStatus)")
         return cell
     }
 
     func outlineViewSelectionDidChange(_ notification: Notification) {
-        guard let id = repositoryIDs(in: outlineView.selectedRowIndexes).first else { return }
+        guard !isSynchronizingSelection,
+              let id = repositoryIDs(in: outlineView.selectedRowIndexes).first else { return }
         coordinator.selectRepository(id)
     }
 
@@ -198,17 +219,37 @@ extension RepoSidebarViewController {
         coordinator.setSearchText(searchField.stringValue)
     }
 
+    private func sidebarVisibleRepositories(
+        _ repositories: [RepoDescriptor],
+        matchingQuery query: String
+    ) -> [RepoDescriptor] {
+        let matching = RepositoryCatalogIndex.firstRepositories(repositories).filter { repository in
+            query.isEmpty || repository.displayName.localizedCaseInsensitiveContains(query)
+                || repository.canonicalURL.path.localizedCaseInsensitiveContains(query)
+        }
+        let mainGitDirectories = Set(matching.compactMap { repository -> String? in
+            guard !repository.isLinkedWorktree,
+                  let commonGitDirectoryURL = repository.commonGitDirectoryURL else { return nil }
+            return commonGitDirectoryURL.standardizedFileURL.path
+        })
+        var representedLinkedDirectories = Set<String>()
+        return matching.filter { repository in
+            guard repository.isLinkedWorktree,
+                  let commonGitDirectoryURL = repository.commonGitDirectoryURL else { return true }
+            let gitDirectoryPath = commonGitDirectoryURL.standardizedFileURL.path
+            guard !mainGitDirectories.contains(gitDirectoryPath) else { return false }
+            return representedLinkedDirectories.insert(gitDirectoryPath).inserted
+        }
+    }
+
     func makeNodes(_ snapshot: AppSnapshot) -> [Node] {
 #if DEBUG
         treeBuildCountForTesting += 1
 #endif
         let query = snapshot.state.uiState.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let uniqueRepositories = RepositoryCatalogIndex.firstRepositories(snapshot.repositories)
-        let filtered = uniqueRepositories.filter { repository in
-            query.isEmpty || repository.displayName.localizedCaseInsensitiveContains(query)
-                || repository.canonicalURL.path.localizedCaseInsensitiveContains(query)
-        }
-        let repositoriesBySource = Dictionary(grouping: uniqueRepositories, by: { $0.source.id })
+        let visibleRepositories = sidebarVisibleRepositories(snapshot.repositories, matchingQuery: "")
+        let filtered = sidebarVisibleRepositories(snapshot.repositories, matchingQuery: query)
+        let repositoriesBySource = Dictionary(grouping: visibleRepositories, by: { $0.source.id })
         let filteredRepositoriesBySource = Dictionary(grouping: filtered, by: { $0.source.id })
         let pinnedRepositoryIDs = snapshot.state.uiState.pinnedRepositoryIDs
         var nodes: [Node] = []
@@ -236,31 +277,52 @@ extension RepoSidebarViewController {
                 badge: sourceBadge(snapshot.scanMessages[source.id]),
                 kind: .root(source.id)
             ))
+            let environment = FolderLevelEnvironment(sourceID: source.id, sourceURL: sourceURL, snapshot: snapshot)
             nodes.append(contentsOf: makeFolderLevel(
-                sourceID: source.id,
-                sourceURL: sourceURL,
+                environment: environment,
                 relativePrefix: [],
                 repositories: repositories,
-                relativeComponentsByRepositoryID: relativeComponentsByRepositoryID,
-                snapshot: snapshot
+                relativeComponentsByRepositoryID: relativeComponentsByRepositoryID
             ))
         }
-        let standalone = filtered
+        nodes.append(contentsOf: standaloneSectionNodes(
+            filteredRepositories: filtered,
+            visibleRepositories: visibleRepositories,
+            pinnedRepositoryIDs: pinnedRepositoryIDs,
+            snapshot: snapshot
+        ))
+        repositoryNodesByID.removeAll(keepingCapacity: true)
+        indexRepositoryNodes(in: nodes)
+        return nodes
+    }
+
+    private func standaloneSectionNodes(
+        filteredRepositories: [RepoDescriptor],
+        visibleRepositories: [RepoDescriptor],
+        pinnedRepositoryIDs: Set<UUID>,
+        snapshot: AppSnapshot
+    ) -> [Node] {
+        let standalone = filteredRepositories
             .filter {
                 if case .standalone = $0.source { return !pinnedRepositoryIDs.contains($0.id) }
                 return false
             }
             .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
             .map { repositoryNode($0, snapshot: snapshot) }
-        if !snapshot.state.standaloneRepos.isEmpty {
-            nodes.append(Node(title: "Repositories", kind: .standaloneSection))
-            nodes.append(contentsOf: standalone)
-        }
-        repositoryNodesByID.removeAll(keepingCapacity: true)
-        indexRepositoryNodes(in: nodes)
-        return nodes
+        guard visibleRepositories.contains(where: {
+            if case .standalone = $0.source { return true }
+            return false
+        }) else { return [] }
+        return [Node(title: "Repositories", kind: .standaloneSection)] + standalone
     }
-
+    func sidebarSelectionRepositoryID(for repositoryID: UUID, snapshot: AppSnapshot) -> UUID? {
+        guard let repository = snapshot.repositories.first(where: { $0.id == repositoryID }),
+              let commonGitDirectoryURL = repository.commonGitDirectoryURL else { return repositoryID }
+        let query = snapshot.state.uiState.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sidebarVisibleRepositories(snapshot.repositories, matchingQuery: query).first(where: {
+            $0.commonGitDirectoryURL?.standardizedFileURL == commonGitDirectoryURL.standardizedFileURL
+        })?.id ?? repositoryID
+    }
     func indexRepositoryNodes(in nodes: [Node]) {
         for node in nodes {
             if case .repository(let repositoryID) = node.kind {
@@ -290,13 +352,11 @@ extension RepoSidebarViewController {
             .map(String.init)
     }
 
-    func makeFolderLevel(
-        sourceID: UUID,
-        sourceURL: URL,
+    private func makeFolderLevel(
+        environment: FolderLevelEnvironment,
         relativePrefix: [String],
         repositories: [RepoDescriptor],
-        relativeComponentsByRepositoryID: [UUID: [String]],
-        snapshot: AppSnapshot
+        relativeComponentsByRepositoryID: [UUID: [String]]
     ) -> [Node] {
         var directRepositories: [RepoDescriptor] = []
         var folders: [String: [RepoDescriptor]] = [:]
@@ -317,23 +377,21 @@ extension RepoSidebarViewController {
 
         var nodes = directRepositories
             .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
-            .map { repositoryNode($0, snapshot: snapshot) }
+            .map { repositoryNode($0, snapshot: environment.snapshot) }
         for folderName in folders.keys.sorted(by: { $0.localizedStandardCompare($1) == .orderedAscending }) {
             let folderComponents = relativePrefix + [folderName]
             let folderPath = folderComponents.joined(separator: "/")
-            let folderURL = sourceURL.appendingPathComponent(folderPath, isDirectory: true)
+            let folderURL = environment.sourceURL.appendingPathComponent(folderPath, isDirectory: true)
             nodes.append(Node(
                 title: folderName,
                 subtitle: folderURL.path,
-                kind: .folder(sourceID: sourceID, relativePath: folderPath)
+                kind: .folder(sourceID: environment.sourceID, relativePath: folderPath)
             ))
             nodes.append(contentsOf: makeFolderLevel(
-                sourceID: sourceID,
-                sourceURL: sourceURL,
+                environment: environment,
                 relativePrefix: folderComponents,
                 repositories: folders[folderName] ?? [],
-                relativeComponentsByRepositoryID: relativeComponentsByRepositoryID,
-                snapshot: snapshot
+                relativeComponentsByRepositoryID: relativeComponentsByRepositoryID
             ))
         }
         return nodes

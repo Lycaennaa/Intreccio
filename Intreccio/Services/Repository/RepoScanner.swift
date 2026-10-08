@@ -20,6 +20,21 @@ nonisolated struct ScannedRepository: Sendable, Equatable {
     let canonicalURL: URL
     let relativePath: String
     let resourceID: String?
+    let gitDirectoryInfo: GitDirectoryInfo?
+
+    init(
+        url: URL,
+        canonicalURL: URL,
+        relativePath: String,
+        resourceID: String?,
+        gitDirectoryInfo: GitDirectoryInfo? = nil
+    ) {
+        self.url = url
+        self.canonicalURL = canonicalURL
+        self.relativePath = relativePath
+        self.resourceID = resourceID
+        self.gitDirectoryInfo = gitDirectoryInfo
+    }
 }
 
 nonisolated struct RepoScanResult: Sendable, Equatable {
@@ -148,7 +163,8 @@ actor RepoScanner {
                             url: directory,
                             canonicalURL: gitRoot,
                             relativePath: relativePath,
-                            resourceID: ResourceIdentity.read(from: gitRoot)
+                            resourceID: ResourceIdentity.read(from: gitRoot),
+                            gitDirectoryInfo: GitDirectoryInfo.read(at: gitRoot)
                         ))
                         if repositories.count >= configuration.repositoryLimit {
                             incompleteReason = "Scan stopped after finding \(configuration.repositoryLimit) repositories."
@@ -171,6 +187,10 @@ actor RepoScanner {
             visitedDirectoryCount: visited,
             duration: startedAt.duration(to: clock.now)
         )
+    }
+
+    func gitDirectoryInfo(at workingDirectoryURL: URL) -> GitDirectoryInfo? {
+        GitDirectoryInfo.read(at: workingDirectoryURL)
     }
 
     private func isNormalGitDirectory(_ marker: URL) -> Bool {

@@ -13,7 +13,7 @@ nonisolated struct RepositorySourceScanError: Error, Sendable, CustomStringConve
 }
 
 nonisolated enum RepositoryStandaloneResolution: Sendable {
-    case resolved(source: StandaloneRepository, root: URL)
+    case resolved(source: StandaloneRepository, root: URL, gitDirectoryInfo: GitDirectoryInfo?)
     case repositoryUnavailable(source: StandaloneRepository, message: String)
     case accessUnavailable(source: StandaloneRepository, message: String)
 }
@@ -93,8 +93,14 @@ final class RepositorySourceResolver {
             return .repositoryUnavailable(source: updated, message: String(describing: error))
         }
 
+        let gitDirectoryInfo = await inspectGitDirectory(at: repositoryRoot)
         await bookmarkStore.stopAccessing(resolution)
         try Task.checkCancellation()
-        return .resolved(source: updated, root: repositoryRoot)
+        return .resolved(source: updated, root: repositoryRoot, gitDirectoryInfo: gitDirectoryInfo)
+
     }
+    func inspectGitDirectory(at workingDirectoryURL: URL) async -> GitDirectoryInfo? {
+        await scanner.gitDirectoryInfo(at: workingDirectoryURL)
+    }
+
 }

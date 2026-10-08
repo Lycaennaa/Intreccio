@@ -132,6 +132,43 @@ final class GitServiceHistoryQueryTests: XCTestCase {
             XCTAssertEqual(result.standardErrorText, "fatal")
         }
     }
+
+    func testBranchHistoryTipsUsesExactRefLookup() async throws {
+        let objectID = String(repeating: "a", count: 40)
+        let runner = RecordingGitRunner(responses: [
+            .result(recordedGitResult(output: "\(objectID)\n"))
+        ])
+
+        let tips = try await GitService(runner: runner).historyTips(
+            repository: URL(fileURLWithPath: "/repository"),
+            branchReference: "refs/heads/main"
+        )
+
+        XCTAssertEqual(tips, HistoryTips(localObjectID: objectID, upstreamObjectID: nil))
+        let invocations = await runner.invocations
+        XCTAssertEqual(invocations.count, 1)
+        XCTAssertEqual(
+            invocations[0].arguments,
+            ["show-ref", "--verify", "--hash", "refs/heads/main"]
+        )
+        XCTAssertEqual(invocations[0].acceptedExitCodes, [0, 1])
+        XCTAssertEqual(invocations[0].outputLimit, 2 * 1_024)
+    }
+
+    func testBranchHistoryTipsReturnsNilForMissingRef() async throws {
+        let runner = RecordingGitRunner(responses: [
+            .result(recordedGitResult(exitCode: 1))
+        ])
+
+        let tips = try await GitService(runner: runner).historyTips(
+            repository: URL(fileURLWithPath: "/repository"),
+            branchReference: "refs/heads/missing"
+        )
+
+        XCTAssertNil(tips)
+        let invocations = await runner.invocations
+        XCTAssertEqual(invocations.count, 1)
+    }
     func testHistoryPageSurfacesPartialLengthFramedMetadata() async throws {
         let objectID = String(repeating: "a", count: 40)
         let object = Data(([

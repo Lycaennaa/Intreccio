@@ -37,6 +37,76 @@ final class RepositoryCatalogScanConcurrencyTests: XCTestCase {
         XCTAssertEqual(finalStats.startedCount, roots.count)
         XCTAssertEqual(transaction.change.state.watchRoots.map(\.id), roots.map(\.id))
     }
+    func testColdRestoreResolvesLinkedSnapshotMetadataAfterIncompleteScan() async throws {
+        let directory = try makeTestDirectory()
+        let mainURL = directory.appendingPathComponent("main", isDirectory: true)
+        let linkedURL = directory.appendingPathComponent("linked", isDirectory: true)
+        try FileManager.default.createDirectory(at: mainURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: linkedURL, withIntermediateDirectories: true)
+        let commonGitDirectoryURL = mainURL.appendingPathComponent(".git", isDirectory: true)
+        let linkedGitDirectoryURL = commonGitDirectoryURL
+            .appendingPathComponent("worktrees/linked", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: linkedGitDirectoryURL,
+            withIntermediateDirectories: true
+        )
+        try Data("../..\n".utf8).write(to: linkedGitDirectoryURL.appendingPathComponent("commondir"))
+        try Data("gitdir: \(linkedGitDirectoryURL.path)\n".utf8)
+            .write(to: linkedURL.appendingPathComponent(".git"))
+
+        let sourceID = UUID()
+        let mainID = UUID()
+        let linkedID = UUID()
+        let source = WatchRoot(
+            id: sourceID,
+            displayName: directory.lastPathComponent,
+            bookmarkData: Data(),
+            lastResolvedPath: directory.path,
+            resourceID: nil,
+            exclusions: []
+        )
+        let snapshots = [
+            RepositorySnapshot(
+                id: mainID,
+                sourceID: sourceID,
+                relativePath: "main",
+                canonicalPath: mainURL.path,
+                resourceID: nil,
+                availability: .available
+            ),
+            RepositorySnapshot(
+                id: linkedID,
+                sourceID: sourceID,
+                relativePath: "linked",
+                canonicalPath: linkedURL.path,
+                resourceID: nil,
+                availability: .available
+            )
+        ]
+        let incompleteScan = RepoScanResult(
+            repositories: [],
+            warnings: [],
+            incompleteReason: "Scan stopped at repository limit.",
+            visitedDirectoryCount: 50,
+            duration: .zero
+        )
+        let (operations, _) = makeOperations { source in
+            .success(source: source, result: incompleteScan)
+        }
+
+        let transaction = try await operations.prepareRestoreSources(
+            state: PersistedState(watchRoots: [source], repoSnapshots: snapshots),
+            generation: nil,
+            refreshUpstream: false
+        )
+
+        let linked = try XCTUnwrap(transaction.change.repositories.first { $0.id == linkedID })
+        XCTAssertEqual(transaction.change.repositories.count, 2)
+        XCTAssertEqual(linked.availability, .available)
+        XCTAssertTrue(linked.isLinkedWorktree)
+        XCTAssertEqual(linked.mainRepositoryURL, mainURL)
+    }
+
     func testNearBudgetRestoreStopsAfterCandidateBudget() async {
         let roots = makeWatchRoots(count: PersistedCatalogBudget.maxEntryCount - 1)
         let probe = ScanProbe()
@@ -135,10 +205,10 @@ final class RepositoryCatalogScanConcurrencyTests: XCTestCase {
         let change = transaction.change
         XCTAssertEqual(change.state.standaloneRepos.map(\.id), sources.map(\.id))
         XCTAssertEqual(change.state.standaloneRepos.map(\.lastResolvedPath), roots.map(\.path))
-        XCTAssertEqual(change.standaloneURLs[sources[0].id], roots[0])
-        XCTAssertEqual(change.standaloneURLs[sources[1].id], roots[1])
-        XCTAssertNil(change.standaloneURLs[sources[2].id])
-        XCTAssertEqual(change.standaloneURLs[sources[3].id], roots[3])
+        XCTAssertEqual(change.standaloneRepositories[sources[0].id]?.url, roots[0])
+        XCTAssertEqual(change.standaloneRepositories[sources[1].id]?.url, roots[1])
+        XCTAssertNil(change.standaloneRepositories[sources[2].id])
+        XCTAssertEqual(change.standaloneRepositories[sources[3].id]?.url, roots[3])
         XCTAssertEqual(
             change.scanMessages[sources[2].id],
             "Repository unavailable: Process exited with status 128: root failed"

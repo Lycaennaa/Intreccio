@@ -36,6 +36,7 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
     let commitCompositionController: ChangesCommitController
     let mutationController: ChangesMutationController
     let applicationActionsController: ChangesApplicationActionsController
+    let worktreeSelectorController: ChangesWorktreeSelectorController
     var roots: [Node] = []
     var repositoryID: UUID?
     var suppressSelectionChange = false
@@ -76,6 +77,7 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
         commitCompositionController = ChangesCommitController(coordinator: coordinator)
         mutationController = ChangesMutationController(coordinator: coordinator)
         applicationActionsController = ChangesApplicationActionsController(coordinator: coordinator)
+        worktreeSelectorController = ChangesWorktreeSelectorController(coordinator: coordinator)
         super.init(nibName: nil, bundle: nil)
 
         applicationActionsController.windowProvider = { [weak self] in
@@ -95,10 +97,7 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
         container.layer?.backgroundColor = NSColor.black.cgColor
         container.setAccessibilityLabel("Changes")
 
-        summaryLabel.font = .preferredFont(forTextStyle: .caption1)
-        summaryLabel.textColor = .secondaryLabelColor
-        summaryLabel.lineBreakMode = .byTruncatingTail
-
+        let headerStack = makeHeaderStack()
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("Change"))
         outlineView.addTableColumn(column)
         outlineView.outlineTableColumn = column
@@ -126,15 +125,15 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
         stateLabel.maximumNumberOfLines = 3
 
         let controls = mutationController.makeControlsView(commitView: commitCompositionController.view)
-        for child in [summaryLabel, scrollView, stateLabel, controls] {
+        for child in [headerStack, scrollView, stateLabel, controls] {
             child.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(child)
         }
         NSLayoutConstraint.activate([
-            summaryLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
-            summaryLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            summaryLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            scrollView.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 8),
+            headerStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
+            headerStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            headerStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            scrollView.topAnchor.constraint(equalTo: headerStack.bottomAnchor, constant: 8),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -8),
@@ -144,11 +143,27 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
             stateLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
             stateLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
             stateLabel.leadingAnchor.constraint(greaterThanOrEqualTo: scrollView.leadingAnchor, constant: 20),
-            stateLabel.trailingAnchor.constraint(lessThanOrEqualTo: scrollView.trailingAnchor, constant: -20),
+            stateLabel.trailingAnchor.constraint(lessThanOrEqualTo: scrollView.trailingAnchor, constant: -20)
         ])
         view = container
     }
 
+    private func makeHeaderStack() -> NSStackView {
+        summaryLabel.font = .preferredFont(forTextStyle: .caption1)
+        summaryLabel.textColor = .secondaryLabelColor
+        summaryLabel.lineBreakMode = .byTruncatingTail
+        let headerStack = NSStackView()
+        headerStack.orientation = .horizontal
+        headerStack.alignment = .centerY
+        headerStack.distribution = .fill
+        headerStack.spacing = 8
+        headerStack.addArrangedSubview(summaryLabel)
+        headerStack.addArrangedSubview(worktreeSelectorController.button)
+        summaryLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        worktreeSelectorController.button.setContentHuggingPriority(.required, for: .horizontal)
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+        return headerStack
+    }
     override func viewDidLayout() {
         super.viewDidLayout()
         commitCompositionController.updateLayout()
@@ -177,20 +192,24 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
         guard isViewLoaded else { return }
         let snapshot = snapshot ?? coordinator.snapshot
         guard snapshot.state.uiState.mode == .changes else {
+            worktreeSelectorController.clear()
             showState("History", summary: "Commit history")
             return
         }
         guard let selectedID = snapshot.state.uiState.selectedRepoID,
               let repository = snapshot.repositories.first(where: { $0.id == selectedID }) else {
+            worktreeSelectorController.clear()
             repositoryID = nil
             showState("Select a repository", summary: "Changes")
             return
         }
         if case .unavailable(let reason) = repository.availability {
+            worktreeSelectorController.clear()
             repositoryID = selectedID
             showState(reason, summary: repository.displayName)
             return
         }
+        worktreeSelectorController.reload(repository: repository)
 
         let oldPaths = repositoryID == selectedID ? Set(selectedGitPaths) : []
         repositoryID = selectedID
@@ -226,7 +245,7 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
         case .failed: summary += "   Status may be stale"
         case .idle: break
         }
-        summaryLabel.stringValue = summary
+        summaryLabel.stringValue = "\(repository.displayName) · \(summary)"
         stateLabel.stringValue = status.isClean && !status.isRebaseInProgress ? "Working tree clean" : ""
         stateLabel.isHidden = !status.isClean || status.isRebaseInProgress
         configureMutationControls(status: status, snapshot: snapshot, statusContent: content)

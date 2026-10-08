@@ -136,7 +136,12 @@ extension RepositoryCatalogRefactorTests {
         let result = RepositoryCatalogRebuilder.rebuild(
             state: state,
             sourceScans: [watchRootID: scan],
-            standaloneURLs: [standaloneID: URL(fileURLWithPath: "/standalone", isDirectory: true)]
+            standaloneRepositories: [
+                standaloneID: StandaloneRepositoryLocation(
+                    url: URL(fileURLWithPath: "/standalone", isDirectory: true),
+                    gitDirectoryInfo: nil
+                )
+            ]
         )
 
         XCTAssertEqual(
@@ -217,6 +222,173 @@ extension RepositoryCatalogRefactorTests {
         XCTAssertFalse(result.repositories.contains { $0.id == removedID })
     }
 
+    func testIncompleteScanPreservesCachedLinkedWorktreeMetadata() {
+        let sourceID = UUID()
+        let mainID = UUID()
+        let linkedID = UUID()
+        let source = WatchRoot(
+            id: sourceID,
+            displayName: "Workspace",
+            bookmarkData: Data(),
+            lastResolvedPath: "/workspace",
+            resourceID: nil,
+            exclusions: []
+        )
+        var state = PersistedState()
+        state.watchRoots = [source]
+        state.repoSnapshots = [
+            RepositorySnapshot(
+                id: mainID,
+                sourceID: sourceID,
+                relativePath: "main",
+                canonicalPath: "/workspace/main",
+                resourceID: nil,
+                availability: .available
+            ),
+            RepositorySnapshot(
+                id: linkedID,
+                sourceID: sourceID,
+                relativePath: "linked",
+                canonicalPath: "/workspace/linked",
+                resourceID: nil,
+                availability: .available
+            )
+        ]
+        let sourceDescriptor = RepositorySource.watchRoot(
+            id: sourceID,
+            name: source.displayName,
+            path: source.lastResolvedPath
+        )
+        let mainURL = URL(fileURLWithPath: "/workspace/main", isDirectory: true)
+        let linkedURL = URL(fileURLWithPath: "/workspace/linked", isDirectory: true)
+        let commonGitDirectoryURL = URL(fileURLWithPath: "/workspace/main/.git", isDirectory: true)
+        let previousRepositories = [
+            RepoDescriptor(
+                id: mainID,
+                source: sourceDescriptor,
+                url: mainURL,
+                canonicalURL: mainURL,
+                resourceID: nil,
+                relativePath: "main",
+                availability: .available,
+                gitDirectoryInfo: GitDirectoryInfo(
+                    commonGitDirectoryURL: commonGitDirectoryURL,
+                    isLinkedWorktree: false
+                )
+            ),
+            RepoDescriptor(
+                id: linkedID,
+                source: sourceDescriptor,
+                url: linkedURL,
+                canonicalURL: linkedURL,
+                resourceID: nil,
+                relativePath: "linked",
+                availability: .available,
+                gitDirectoryInfo: GitDirectoryInfo(
+                    commonGitDirectoryURL: commonGitDirectoryURL,
+                    isLinkedWorktree: true
+                )
+            )
+        ]
+        let scan = RepoScanResult(
+            repositories: [],
+            warnings: [],
+            incompleteReason: "Scan stopped at repository limit.",
+            visitedDirectoryCount: 50,
+            duration: .zero
+        )
+
+        let result = RepositoryCatalogRebuilder.rebuild(
+            state: state,
+            sourceScans: [sourceID: scan],
+            standaloneRepositories: [:],
+            previousRepositories: previousRepositories
+        )
+
+        let linked = result.repositories.first { $0.id == linkedID }
+        XCTAssertEqual(linked?.availability, .available)
+        XCTAssertTrue(linked?.isLinkedWorktree == true)
+        XCTAssertEqual(linked?.mainRepositoryURL, mainURL)
+    }
+
+    func testExcludedSnapshotFallbackPreservesLinkedWorktreeMetadata() {
+        let excludedSourceID = UUID()
+        let fallbackSourceID = UUID()
+        let linkedID = UUID()
+        let excludedSource = WatchRoot(
+            id: excludedSourceID,
+            displayName: "Excluded source",
+            bookmarkData: Data(),
+            lastResolvedPath: "/workspace",
+            resourceID: nil,
+            exclusions: ["linked"]
+        )
+        let fallbackSource = WatchRoot(
+            id: fallbackSourceID,
+            displayName: "Fallback source",
+            bookmarkData: Data(),
+            lastResolvedPath: "/workspace",
+            resourceID: nil,
+            exclusions: []
+        )
+        var state = PersistedState()
+        state.watchRoots = [excludedSource, fallbackSource]
+        state.repoSnapshots = [RepositorySnapshot(
+            id: linkedID,
+            sourceID: excludedSourceID,
+            relativePath: "linked",
+            canonicalPath: "/workspace/linked",
+            resourceID: nil,
+            availability: .available
+        )]
+        let source = RepositorySource.watchRoot(
+            id: excludedSourceID,
+            name: excludedSource.displayName,
+            path: excludedSource.lastResolvedPath
+        )
+        let linkedURL = URL(fileURLWithPath: "/workspace/linked", isDirectory: true)
+        let commonGitDirectoryURL = URL(fileURLWithPath: "/workspace/main/.git", isDirectory: true)
+        let previousRepository = RepoDescriptor(
+            id: linkedID,
+            source: source,
+            url: linkedURL,
+            canonicalURL: linkedURL,
+            resourceID: nil,
+            relativePath: "linked",
+            availability: .available,
+            gitDirectoryInfo: GitDirectoryInfo(
+                commonGitDirectoryURL: commonGitDirectoryURL,
+                isLinkedWorktree: true
+            )
+        )
+
+        let result = RepositoryCatalogRebuilder.rebuild(
+            state: state,
+            sourceScans: [
+                excludedSourceID: RepoScanResult(
+                    repositories: [],
+                    warnings: [],
+                    incompleteReason: nil,
+                    visitedDirectoryCount: 1,
+                    duration: .zero
+                ),
+                fallbackSourceID: RepoScanResult(
+                    repositories: [],
+                    warnings: [],
+                    incompleteReason: "Scan stopped at repository limit.",
+                    visitedDirectoryCount: 50,
+                    duration: .zero
+                )
+            ],
+            standaloneRepositories: [:],
+            previousRepositories: [previousRepository]
+        )
+
+        let linked = result.repositories.first { $0.id == linkedID }
+        XCTAssertEqual(linked?.source.id, fallbackSourceID)
+        XCTAssertTrue(linked?.isLinkedWorktree == true)
+    }
+
     func testRebuildPreservesCanonicalPathMatchingThroughSymlinks() throws {
         let directory = try makeTestDirectory()
         let realURL = directory.appendingPathComponent("Real", isDirectory: true)
@@ -258,7 +430,7 @@ extension RepositoryCatalogRefactorTests {
                 visitedDirectoryCount: 1,
                 duration: .zero
             )],
-            standaloneURLs: [:]
+            standaloneRepositories: [:]
         )
 
         XCTAssertEqual(result.repositories.map(\.id), [snapshotID])

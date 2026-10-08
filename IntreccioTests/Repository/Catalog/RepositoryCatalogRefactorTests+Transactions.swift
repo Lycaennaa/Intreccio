@@ -189,7 +189,7 @@ extension RepositoryCatalogRefactorTests {
         let change = CatalogChange(
             state: overBudget,
             sourceScans: [:],
-            standaloneURLs: [:],
+            standaloneRepositories: [:],
             repositories: [],
             scanMessages: [:],
             effect: .sourceRescanned(changedRepositoryIDs: [])

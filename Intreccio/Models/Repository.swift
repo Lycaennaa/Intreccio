@@ -74,6 +74,72 @@ nonisolated enum GitHubRepositoryURL {
     }
 }
 
+nonisolated struct GitDirectoryInfo: Sendable, Equatable {
+    private enum MetadataFileRead {
+        case text(String)
+        case unavailable
+        case tooLarge
+    }
+
+    private static let maximumMetadataFileBytes = 4_096
+
+    let commonGitDirectoryURL: URL
+    let isLinkedWorktree: Bool
+
+    static func read(at workingDirectoryURL: URL) -> GitDirectoryInfo? {
+        let gitMarker = workingDirectoryURL.appendingPathComponent(".git")
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: gitMarker.path),
+              let type = attributes[.type] as? FileAttributeType else { return nil }
+        if type == .typeDirectory {
+            return GitDirectoryInfo(
+                commonGitDirectoryURL: gitMarker.standardizedFileURL,
+                isLinkedWorktree: false
+            )
+        }
+        guard type == .typeRegular,
+              case .text(let markerContents) = readMetadataFile(at: gitMarker),
+              markerContents.hasPrefix("gitdir: ") else { return nil }
+        let gitDirectoryPath = String(markerContents.dropFirst("gitdir: ".count))
+            .trimmingCharacters(in: .newlines)
+        let gitDirectoryURL = URL(fileURLWithPath: gitDirectoryPath, relativeTo: workingDirectoryURL)
+            .standardizedFileURL
+        let commonDirectoryMarker = gitDirectoryURL.appendingPathComponent("commondir")
+        let commonDirectoryPath: String
+        switch readMetadataFile(at: commonDirectoryMarker) {
+        case .text(let path):
+            commonDirectoryPath = path
+        case .unavailable:
+            return GitDirectoryInfo(commonGitDirectoryURL: gitDirectoryURL, isLinkedWorktree: false)
+        case .tooLarge:
+            return nil
+        }
+        let commonGitDirectoryURL = URL(
+            fileURLWithPath: commonDirectoryPath.trimmingCharacters(in: .newlines),
+            relativeTo: gitDirectoryURL
+        ).standardizedFileURL
+        return GitDirectoryInfo(
+            commonGitDirectoryURL: commonGitDirectoryURL,
+            isLinkedWorktree: commonGitDirectoryURL != gitDirectoryURL
+        )
+    }
+
+    private static func readMetadataFile(at url: URL) -> MetadataFileRead {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return .unavailable }
+        defer { try? handle.close() }
+        guard let data = try? handle.read(upToCount: maximumMetadataFileBytes + 1) else {
+            return .unavailable
+        }
+        guard data.count <= maximumMetadataFileBytes else { return .tooLarge }
+        guard let contents = String(data: data, encoding: .utf8) else { return .unavailable }
+        return .text(contents)
+    }
+}
+
+nonisolated struct StandaloneRepositoryLocation: Sendable, Equatable {
+    let url: URL
+    let gitDirectoryInfo: GitDirectoryInfo?
+}
+
 nonisolated struct RepoDescriptor: Sendable, Equatable, Identifiable {
     let id: UUID
     let source: RepositorySource
@@ -82,6 +148,53 @@ nonisolated struct RepoDescriptor: Sendable, Equatable, Identifiable {
     let resourceID: String?
     let relativePath: String?
     let availability: RepositoryAvailability
+    let gitDirectoryInfo: GitDirectoryInfo?
+    let mainRepositoryURL: URL?
 
-    var displayName: String { canonicalURL.lastPathComponent }
+    init(
+        id: UUID,
+        source: RepositorySource,
+        url: URL,
+        canonicalURL: URL,
+        resourceID: String?,
+        relativePath: String?,
+        availability: RepositoryAvailability,
+        gitDirectoryInfo: GitDirectoryInfo? = nil,
+        mainRepositoryURL: URL? = nil
+    ) {
+        self.id = id
+        self.source = source
+        self.url = url
+        self.canonicalURL = canonicalURL
+        self.resourceID = resourceID
+        self.relativePath = relativePath
+        self.availability = availability
+        self.gitDirectoryInfo = gitDirectoryInfo
+        self.mainRepositoryURL = mainRepositoryURL
+    }
+
+    var commonGitDirectoryURL: URL? { gitDirectoryInfo?.commonGitDirectoryURL }
+    var isLinkedWorktree: Bool { gitDirectoryInfo?.isLinkedWorktree == true }
+    var baseDisplayName: String {
+        (mainRepositoryURL ?? canonicalURL).lastPathComponent
+    }
+    var displayName: String {
+        guard isLinkedWorktree else { return canonicalURL.lastPathComponent }
+        guard let mainRepositoryURL else { return canonicalURL.lastPathComponent }
+        return "\(mainRepositoryURL.lastPathComponent) (\(canonicalURL.lastPathComponent))"
+    }
+
+    func withMainRepositoryURL(_ repositoryURL: URL) -> RepoDescriptor {
+        RepoDescriptor(
+            id: id,
+            source: source,
+            url: url,
+            canonicalURL: canonicalURL,
+            resourceID: resourceID,
+            relativePath: relativePath,
+            availability: availability,
+            gitDirectoryInfo: gitDirectoryInfo,
+            mainRepositoryURL: repositoryURL
+        )
+    }
 }

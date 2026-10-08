@@ -16,7 +16,7 @@ extension AppCoordinator {
         cancelSelectedMutation(clearMessage: true)
         selectedSession.replaceLoadTask(with: nil)
         clearSelectedDiff()
-        clearSelectedHistory()
+        clearSelectedHistory(preservingBranchSelection: false)
         state.uiState.selectedRepoID = repositoryID
         let loadTask = Task { [weak self] in
             guard let self else { return }

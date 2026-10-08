@@ -55,6 +55,7 @@ final class RepositoryCatalogSourceOperations {
             catalogState: catalogState,
             bookmarkStore: bookmarkStore,
             gitService: gitService,
+            sourceResolver: sourceResolver,
             lifecycle: lifecycle,
             sourceScanner: sourceScanner
         )
@@ -63,12 +64,13 @@ final class RepositoryCatalogSourceOperations {
             lifecycle: lifecycle,
             generation: generation,
             sourceScanner: sourceScanner,
+            sourceResolver: sourceResolver,
             standaloneResolver: standaloneResolver
         )
     }
 
     var sourceScans: [UUID: RepoScanResult] { catalogState.sourceScans }
-    var standaloneURLs: [UUID: URL] { catalogState.standaloneURLs }
+    var standaloneRepositories: [UUID: StandaloneRepositoryLocation] { catalogState.standaloneRepositories }
     var repositories: [RepoDescriptor] { catalogState.repositories }
     var scanMessages: [UUID: String] { catalogState.scanMessages }
 

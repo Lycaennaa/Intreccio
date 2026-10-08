@@ -63,7 +63,7 @@ protocol RepositoryCatalogDelegate: AnyObject {
 nonisolated struct CatalogChange: Sendable {
     let state: PersistedState
     let sourceScans: [UUID: RepoScanResult]
-    let standaloneURLs: [UUID: URL]
+    let standaloneRepositories: [UUID: StandaloneRepositoryLocation]
     let repositories: [RepoDescriptor]
     let scanMessages: [UUID: String]
     let effect: CatalogEffectPlan
@@ -74,7 +74,7 @@ nonisolated struct CatalogChange: Sendable {
         CatalogChange(
             state: state,
             sourceScans: sourceScans,
-            standaloneURLs: standaloneURLs,
+            standaloneRepositories: standaloneRepositories,
             repositories: repositories,
             scanMessages: scanMessages,
             effect: effect
