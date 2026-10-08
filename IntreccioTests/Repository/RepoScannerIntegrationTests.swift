@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class RepoScannerIntegrationTests: XCTestCase {
     func testScanFindsRootAndStopsBeforeNestedRepository() async throws {
@@ -98,7 +98,6 @@ final class RepoScannerIntegrationTests: XCTestCase {
         XCTAssertEqual(resolution.url.resolvingSymlinksInPath().standardizedFileURL, root.resolvingSymlinksInPath().standardizedFileURL)
     }
 
-
     func testCancellingQueuedScanRemovesWaiterBeforeActiveScansRelease() async throws {
         let firstRoot = try makeTestDirectory()
         let secondRoot = try makeTestDirectory()
@@ -126,7 +125,7 @@ final class RepoScannerIntegrationTests: XCTestCase {
         try await waitUntil { await scanner.waitingCountForTesting == 1 }
         queued.cancel()
         let deadline = ContinuousClock.now.advanced(by: .seconds(1))
-        while !(await completion.finished) && ContinuousClock.now < deadline {
+        while !(await completion.finished), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
         let queuedFinished = await completion.finished
@@ -139,7 +138,6 @@ final class RepoScannerIntegrationTests: XCTestCase {
         _ = await second.result
         _ = await queued.result
     }
-
 
     private func initializeRepository(at url: URL) throws {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -168,7 +166,7 @@ private actor BlockingGitRunner: ProcessRunning {
         outputLimit: Int,
         timeout: Duration,
         priority: ProcessPriority
-    ) async throws -> ProcessCommandResult {
+    ) async -> ProcessCommandResult {
         startedCount += 1
         return await withCheckedContinuation { continuation in
             pending.append((repository, continuation))

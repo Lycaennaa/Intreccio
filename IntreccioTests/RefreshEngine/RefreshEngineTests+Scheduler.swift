@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RefreshEngineTests {
     func testSchedulerRunsTwoAndStartsSelectedRepositoryNext() async throws {
@@ -174,9 +174,5 @@ extension RefreshEngineTests {
         XCTAssertTrue(values.contains("pending-replacement:remote"))
         await scheduler.stop()
     }
-
-
-
-
 
 }

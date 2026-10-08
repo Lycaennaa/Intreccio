@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RefreshEngineTests {
     func testCoverageMergesDescendantsWithoutPrefixCollisions() {
@@ -33,7 +33,7 @@ extension RefreshEngineTests {
                     lastResolvedPath: outerPath + "/nested",
                     resourceID: nil,
                     exclusions: []
-                ),
+                )
             ]
         }
         let indexes = RepositoryFileEventCoveragePlanner.makeSourceIndexes(
@@ -103,7 +103,7 @@ extension RefreshEngineTests {
                 "/work/Source/Excluded/file",
                 "/work/Source/excluded/file",
                 "/work/Source/Excluded-sibling/file",
-                "/work/source/Excluded/file",
+                "/work/source/Excluded/file"
             ],
             sourceRescanPaths: [],
             requiresFullRescan: false
@@ -112,4 +112,3 @@ extension RefreshEngineTests {
         XCTAssertEqual(index.partitionedEventCount(batch), 2)
     }
 }
-

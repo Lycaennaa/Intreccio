@@ -299,7 +299,6 @@ nonisolated struct RepositorySnapshotMap<Value: Sendable>: Sendable {
 #endif
 }
 
-
 extension RepositorySnapshotMap: Equatable where Value: Equatable {
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         guard lhs.count == rhs.count else { return false }

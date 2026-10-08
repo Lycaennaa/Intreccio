@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class RepositoryCloneTests: XCTestCase {
     func testCloneURLNormalizesGitHubRemoteFormsAndRejectsOtherHosts() {
@@ -133,7 +133,6 @@ final class RepositoryCloneTests: XCTestCase {
 
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(at: parent, includingPropertiesForKeys: []).isEmpty)
     }
-
 
     @MainActor
     func testAddingFolderInsideRepositoryRegistersTopLevelRepository() async throws {

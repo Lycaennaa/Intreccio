@@ -1,6 +1,6 @@
 import AppKit
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppShellTests {
     @MainActor
@@ -321,7 +321,6 @@ extension AppShellTests {
         XCTAssertFalse(names.contains("Finder"))
         XCTAssertFalse(names.contains("Terminal"))
     }
-
 
     @MainActor
     func testFileOpenMenuUsesRememberedApplicationForRemovalControls() throws {

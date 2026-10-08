@@ -102,7 +102,7 @@ nonisolated func historyBatchRecord(objectID: String, parentID: String? = nil, s
         "author Test <test@example.com> 1700000000 +0000",
         "committer Test <test@example.com> 1700000000 +0000",
         "",
-        subject,
+        subject
     ])
     let object = Data(headers.joined(separator: "\n").utf8)
     var record = Data("\(objectID) commit \(object.count)\n".utf8)

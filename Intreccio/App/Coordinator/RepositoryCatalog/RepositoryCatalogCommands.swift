@@ -88,7 +88,7 @@ actor RepositoryCatalogCommandGate {
         guard !Task.isCancelled else { throw CancellationError() }
         if case .coalesce = admission,
            locked,
-           (waiterCount >= maximumWaiters || nextAdmissionTicket != nextTicketToAdmit) {
+           waiterCount >= maximumWaiters || nextAdmissionTicket != nextTicketToAdmit {
             throw RepositoryCatalogCommandError.coalesced
         }
 
@@ -321,7 +321,6 @@ final class RepositoryCatalog {
     var commandTaskCountForTesting: Int { commandTasks.count }
 #endif
 
-
     init(
         stateStore: StateStore,
         bookmarkStore: BookmarkStore,
@@ -398,7 +397,6 @@ final class RepositoryCatalog {
             }
         }
     }
-
 
     func startup() async throws {
         stateAcceptancePending = true
@@ -687,7 +685,7 @@ final class RepositoryCatalog {
     func shutdown() async {
         isShuttingDown = true
         generation.invalidateForShutdown()
-        let tasks = [fullRescanTask].compactMap { $0 }
+        let tasks = [fullRescanTask].compactMap(\.self)
             + Array(sourceRefreshTasks.values)
         let commandTasks = Array(self.commandTasks.values)
         tasks.forEach { $0.cancel() }

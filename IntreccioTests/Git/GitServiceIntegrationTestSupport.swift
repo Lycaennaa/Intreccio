@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @discardableResult
 func runGit(at url: URL, arguments: [String]) throws -> ProcessCommandResult {

@@ -246,7 +246,7 @@ nonisolated enum JustProcessRunner {
         DispatchQueue.global(qos: .userInitiated).async {
             var waitStatus: Int32 = 0
             var result = waitpid(processGroupID, &waitStatus, 0)
-            while result == -1 && errno == EINTR {
+            while result == -1, errno == EINTR {
                 result = waitpid(processGroupID, &waitStatus, 0)
             }
             processExit.complete(result == processGroupID ? waitStatus : nil)

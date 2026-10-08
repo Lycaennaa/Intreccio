@@ -1,7 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
-
+import XCTest
 
 actor FileBatchRecorder {
     private(set) var batches: [FileEventBatch] = []
@@ -94,7 +93,7 @@ actor ShutdownOperationProbe {
     private(set) var started: [String] = []
     var continuation: CheckedContinuation<Void, Never>?
 
-    func run(_ name: String) async throws -> RepoStatus {
+    func run(_ name: String) async -> RepoStatus {
         started.append(name)
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             self.continuation = continuation

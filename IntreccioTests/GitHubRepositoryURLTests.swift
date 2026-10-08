@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class GitHubRepositoryURLTests: XCTestCase {
     func testConvertsSupportedGitHubRemoteForms() {
@@ -9,7 +9,7 @@ final class GitHubRepositoryURLTests: XCTestCase {
             "git@github.com:octo/repo.git",
             "https://github.com/octo/repo.git",
             "ssh://git@github.com/octo/repo.git",
-            "www.github.com:octo/repo.git",
+            "www.github.com:octo/repo.git"
         ]
 
         for remote in remotes {
@@ -23,7 +23,7 @@ final class GitHubRepositoryURLTests: XCTestCase {
             "https://github.example.com/octo/repo.git",
             "https://github.com/octo/repo.git?token=secret",
             "git@github.com:octo/repo.git/extra",
-            "https://github.com/octo/../repo.git",
+            "https://github.com/octo/../repo.git"
         ]
 
         for remote in remotes {

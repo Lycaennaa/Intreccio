@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppCoordinatorTests {
     func testUnavailableSelectedRepositoryClearsHistoryCommitAndDiffState() async throws {
@@ -30,7 +30,7 @@ extension AppCoordinatorTests {
             let hasStaleSelection = !snapshot.selectedSession.historyState.commits.isEmpty
                 || snapshot.selectedSession.commitState != .idle
                 || snapshot.selectedSession.diffState != .idle
-            if unavailable && hasStaleSelection { publishedUnavailableWithStaleSelection = true }
+            if unavailable, hasStaleSelection { publishedUnavailableWithStaleSelection = true }
         }
         defer { coordinator.removeSnapshotHandler(subscriptionID) }
 

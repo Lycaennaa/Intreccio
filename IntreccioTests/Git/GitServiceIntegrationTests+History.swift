@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension GitServiceIntegrationTests {
     func testHistoryPagesEmptyAndDetachedRepositories() async throws {
@@ -227,7 +227,7 @@ extension GitServiceIntegrationTests {
         let remote = fixture.url.deletingLastPathComponent()
             .appendingPathComponent("missing-\(UUID().uuidString).git", isDirectory: true)
         try runGit(at: fixture.url.deletingLastPathComponent(), arguments: [
-            "init", "--bare", "-b", "main", remote.path,
+            "init", "--bare", "-b", "main", remote.path
         ])
         try fixture.git("remote", "add", "origin", remote.path)
         try fixture.git("push", "-u", "origin", "main")
@@ -264,7 +264,7 @@ extension GitServiceIntegrationTests {
             .appendingPathComponent("remote-\(UUID().uuidString).git", isDirectory: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: remote) }
         try runGit(at: fixture.url.deletingLastPathComponent(), arguments: [
-            "init", "--bare", "-b", "main", remote.path,
+            "init", "--bare", "-b", "main", remote.path
         ])
         try fixture.git("remote", "add", "origin", remote.path)
         try fixture.git("config", "remote.origin.fetch", "+refs/heads/main:refs/heads/tracking")

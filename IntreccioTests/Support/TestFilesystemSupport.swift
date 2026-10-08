@@ -34,7 +34,7 @@ func makeApplicationBundle(at url: URL, executableIsDirectory: Bool = false) thr
         "CFBundleName": "Editor",
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": "1.0",
-        "CFBundleVersion": "1",
+        "CFBundleVersion": "1"
     ]
     let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
     try data.write(to: contentsURL.appendingPathComponent("Info.plist"))

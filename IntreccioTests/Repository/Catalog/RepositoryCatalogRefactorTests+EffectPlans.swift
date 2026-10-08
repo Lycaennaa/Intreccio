@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RepositoryCatalogRefactorTests {
     func testEffectPlansMapRuntimeStepsForEachCommand() {
@@ -19,7 +19,7 @@ extension RepositoryCatalogRefactorTests {
             .setSelectedRepository,
             .scheduleGitHubURLLookups(target: .changed, forceRefresh: true),
             .enqueueStatusRefreshes(target: .changed, refreshUpstream: true),
-            .reconcileRepositories(updateEventCoverage: true),
+            .reconcileRepositories(updateEventCoverage: true)
         ])
         let startup = CatalogEffectPlan.startupRestored(
             changedRepositoryIDs: [],
@@ -30,20 +30,20 @@ extension RepositoryCatalogRefactorTests {
             .setSelectedRepository,
             .scheduleGitHubURLLookups(target: .all, forceRefresh: true),
             .enqueueStatusRefreshes(target: .changed, refreshUpstream: true),
-            .reconcileRepositories(updateEventCoverage: true),
+            .reconcileRepositories(updateEventCoverage: true)
         ])
         let rescanned = CatalogEffectPlan.sourceRescanned(changedRepositoryIDs: [changedID])
         XCTAssertEqual(rescanned.runtimeSteps, [
             .scheduleGitHubURLLookups(target: .changed, forceRefresh: true),
             .reconcileRepositories(updateEventCoverage: true),
-            .enqueueStatusRefreshes(target: .changed, refreshUpstream: false),
+            .enqueueStatusRefreshes(target: .changed, refreshUpstream: false)
         ])
 
         let added = CatalogEffectPlan.sourceAdded()
         XCTAssertEqual(added.runtimeSteps, [
             .scheduleGitHubURLLookups(target: .all, forceRefresh: false),
             .updateEventCoverage,
-            .enqueueStatusRefreshes(target: .all, refreshUpstream: true),
+            .enqueueStatusRefreshes(target: .all, refreshUpstream: true)
         ])
 
         let removed = CatalogEffectPlan.sourceRemoved(
@@ -55,14 +55,14 @@ extension RepositoryCatalogRefactorTests {
         XCTAssertEqual(removed.runtimeSteps, [
             .scheduleGitHubURLLookups(target: .all, forceRefresh: false),
             .removeRepositories(clearRequestState: false, synchronizeSelectedRepository: false),
-            .updateEventCoverage,
+            .updateEventCoverage
         ])
 
         let excluded = CatalogEffectPlan.sourceExcluded(removedRepositoryIDs: [removedID])
         XCTAssertEqual(excluded.runtimeSteps, [
             .scheduleGitHubURLLookups(target: .all, forceRefresh: false),
             .removeRepositories(clearRequestState: true, synchronizeSelectedRepository: true),
-            .updateEventCoverage,
+            .updateEventCoverage
         ])
         XCTAssertEqual(CatalogEffectPlan.exclusionRestored.runtimeSteps, [])
         XCTAssertEqual(CatalogEffectPlan.sourceReauthorized.runtimeSteps, [.updateEventCoverage])

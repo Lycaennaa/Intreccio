@@ -20,7 +20,6 @@ nonisolated enum ProcessPriority: Sendable {
     case normal
 }
 
-
 nonisolated protocol ProcessRunning: Sendable {
     func execute(
         repository: URL?,
@@ -130,7 +129,6 @@ actor ProcessRunner: ProcessRunning {
 
     private let limiter: ProcessLimiter
     private let executable: String
-
 
     init(executable: String, limiter: ProcessLimiter = .shared) {
         self.executable = executable

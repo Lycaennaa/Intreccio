@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 private struct BoundedStreamTestEvent: Sendable, Equatable {
     let key: Int
     let version: Int
@@ -114,7 +114,7 @@ extension RepositoryRuntimeControllerTests {
                 .refreshStatus(repositoryID),
                 .invalidateGitHubURL(repositoryID),
                 .rescanSource(sourceID, fromWatchRoot: true),
-                .rescanSource(sourceID, fromWatchRoot: true),
+                .rescanSource(sourceID, fromWatchRoot: true)
             ]
         )
         XCTAssertEqual(stream.pendingCount, 0)
@@ -149,7 +149,7 @@ extension RepositoryRuntimeControllerTests {
             [
                 BoundedStreamTestEvent(key: 1, version: 2),
                 BoundedStreamTestEvent(key: 2, version: 1),
-                BoundedStreamTestEvent(key: 3, version: 1),
+                BoundedStreamTestEvent(key: 3, version: 1)
             ]
         )
         let terminal = await iterator.next()
@@ -178,7 +178,7 @@ extension RepositoryRuntimeControllerTests {
         XCTAssertEqual(stream.waitingProducerCount, 0)
         stream.finish()
     }
-    func testRuntimeSnapshotUsesTargetedImmutableRepositoryUpdates() async throws {
+    func testRuntimeSnapshotUsesTargetedImmutableRepositoryUpdates() async {
         let repositoryID = UUID()
         let repository = makeRuntimeRepository(id: repositoryID, path: "persistent-runtime-snapshot")
         let delegate = RuntimeTestDelegate(repositories: [repository])

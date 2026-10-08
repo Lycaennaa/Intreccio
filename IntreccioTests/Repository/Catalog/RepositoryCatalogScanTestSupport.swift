@@ -127,7 +127,7 @@ actor ScanProbe {
 
     func releaseAll() {
         releaseAllRequested = true
-        let waiters = releaseWaiters.values.flatMap { $0 }
+        let waiters = releaseWaiters.values.flatMap(\.self)
         releaseWaiters.removeAll()
         waiters.forEach { $0.resume() }
     }

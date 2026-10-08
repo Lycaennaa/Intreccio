@@ -46,9 +46,9 @@ private actor SourceRepositoryFileEventDebouncer {
 
     func submit(_ slice: SourceRepositoryFileEventSlice) {
         guard !isStopped,
-              (!slice.rawBatch.paths.isEmpty
+              !slice.rawBatch.paths.isEmpty
                   || slice.rawBatch.requiresFullRescan
-                  || slice.rawBatch.hasUnrepresentedChanges) else { return }
+                  || slice.rawBatch.hasUnrepresentedChanges else { return }
         if firstEvent == nil {
             firstEvent = clock.now
             pendingGeneration = slice.generation

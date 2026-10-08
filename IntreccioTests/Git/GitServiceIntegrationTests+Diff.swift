@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension GitServiceIntegrationTests {
     func testRenameDeleteBinaryUnbornConflictAndMergeFixtures() async throws {
@@ -287,7 +287,6 @@ extension GitServiceIntegrationTests {
         XCTAssertNotNil(cache.value(for: "fourth.txt"))
     }
 
-
     func testUntrackedAnalysisHonorsCancellation() async throws {
         let fixture = try GitFixture(testCase: self)
         try fixture.write(String(repeating: "line\n", count: 10_000), to: "cancel.txt")
@@ -479,7 +478,7 @@ extension GitServiceIntegrationTests {
         let records = status.changes.filter { $0.path == "same.txt" }
         XCTAssertEqual(records.count, 2)
         XCTAssertEqual(RepositoryRefreshState(status: status).changeCount, 1)
-        let deletion = try XCTUnwrap(records.first { $0.hasStagedChange })
+        let deletion = try XCTUnwrap(records.first(where: \.hasStagedChange))
         let replacement = try XCTUnwrap(records.first { $0.kind == .untracked })
 
         let staged = try await service.diff(repository: fixture.url, kind: .staged, changes: records)
@@ -622,7 +621,6 @@ extension GitServiceIntegrationTests {
             XCTFail("Unexpected error: \(error)")
         }
     }
-
 
     func testBinaryMetadataCountsTowardAggregateLineCap() async throws {
         let fixture = try GitFixture(testCase: self)

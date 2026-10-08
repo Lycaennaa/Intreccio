@@ -37,7 +37,7 @@ nonisolated struct RepositoryCatalogIndex: Sendable {
                   let order = repositoryOrderByID[id] else { return nil }
             return (order, repository)
         }
-        return matching.sorted { $0.order < $1.order }.map { $0.repository }
+        return matching.sorted { $0.order < $1.order }.map(\.repository)
     }
 
     func containsRepository(from sourceID: UUID) -> Bool {
@@ -83,7 +83,7 @@ nonisolated struct CatalogChange: Sendable {
 }
 
 @MainActor
-enum CatalogCommandOutcome: Sendable {
+enum CatalogCommandOutcome {
     case changed
     case createdRepository(URL)
     case selectedRepository(UUID)
@@ -98,4 +98,3 @@ nonisolated enum RepositoryCatalogFailure: Sendable {
 struct RepositoryCatalogFixture {
     let repositories: [RepoDescriptor]
 }
-

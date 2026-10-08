@@ -62,8 +62,6 @@ extension RepoSidebarQuickOpenController {
         }
     }
 
-
-
     func addOpenFileMenuItem(
         to menu: NSMenu,
         repositoryIDs: [UUID],

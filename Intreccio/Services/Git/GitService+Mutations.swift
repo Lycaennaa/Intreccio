@@ -219,7 +219,7 @@ extension GitService {
     nonisolated static func discardAffectedPathValues(for changes: [FileChange]) -> [GitPath] {
         Array(Set(changes.flatMap { change in
             change.kind == .renamed
-                ? [change.gitPath, change.originalGitPath].compactMap { $0 }
+                ? [change.gitPath, change.originalGitPath].compactMap(\.self)
                 : [change.gitPath]
         })).sorted { $0.displayString.localizedStandardCompare($1.displayString) == .orderedAscending }
     }
@@ -227,7 +227,6 @@ extension GitService {
     nonisolated static func discardAffectedPaths(for changes: [FileChange]) -> [String] {
         discardAffectedPathValues(for: changes).map(\.decodedString)
     }
-
 
     func fileIdentity(repository: URL, path: String) throws -> FileIdentity? {
         var information = stat()
@@ -410,7 +409,7 @@ extension GitService {
                     "#!/bin/sh",
                     "unset GIT_CONFIG_PARAMETERS",
                     "exec \(Self.shellSingleQuoted(hook.path)) \"$@\"",
-                    "",
+                    ""
                 ].joined(separator: "\n")
                 try Data(wrapper.utf8).write(to: temporaryHook, options: .withoutOverwriting)
                 try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: temporaryHook.path)
@@ -442,7 +441,7 @@ extension GitService {
             "  exit $?",
             "fi",
             "exit 0",
-            "",
+            ""
         ].joined(separator: "\n")
         try Data(referenceHookScript.utf8).write(to: referenceHookURL, options: .withoutOverwriting)
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: referenceHookURL.path)
@@ -542,7 +541,7 @@ extension GitService {
             let conflicted = matching.filter { $0.kind == .unmerged }.map(\.displayPath).sorted()
             guard conflicted.isEmpty else { throw GitServiceError.conflictedPaths(conflicted) }
         }
-        let pathValues = Set(matching.flatMap { [$0.gitPath, $0.originalGitPath].compactMap { $0 } })
+        let pathValues = Set(matching.flatMap { [$0.gitPath, $0.originalGitPath].compactMap(\.self) })
         guard pathValues.allSatisfy(\.isAddressable) else {
             throw GitServiceError.staleMutationSelection(pathValues.map(\.displayString).sorted())
         }

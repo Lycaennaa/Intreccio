@@ -47,7 +47,7 @@ final class RepositoryCatalogSourceScanner {
         let operation = operation
         return try await withThrowingTaskGroup(of: IndexedOutcome.self) { group in
             defer { group.cancelAll() }
-            var outcomes = Array<RepositoryWatchRootScanOutcome?>(
+            var outcomes = [RepositoryWatchRootScanOutcome?](
                 repeating: nil,
                 count: sources.count
             )

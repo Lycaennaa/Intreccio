@@ -1,11 +1,8 @@
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @MainActor
 final class RepositoryCatalogRefactorTests: XCTestCase {
-
-
-
 
     func makeChange(message: String, effect: CatalogEffectPlan) -> CatalogChange {
         let repositoryID = UUID()

@@ -39,9 +39,6 @@ nonisolated enum JustfileDiscovery: Equatable, Sendable {
     case definition(JustfileDefinition)
 }
 
-
-
-
 nonisolated enum JustfileService {
     private static let justfileNames = ["justfile", "Justfile", ".justfile"]
     enum CreationError: LocalizedError {
@@ -69,7 +66,6 @@ nonisolated enum JustfileService {
     build:
         npm run build
     """
-
 
     static func discovery(in repositoryURL: URL) -> JustfileDiscovery {
         discovery(in: repositoryURL, justExecutableURL: justExecutableURL())
@@ -469,7 +465,6 @@ nonisolated enum JustfileService {
         )
     }
 
-
     static func createExample(in repositoryURL: URL) throws -> URL {
         let fileURL = repositoryURL.appendingPathComponent("justfile")
         guard !hasJustfile(in: repositoryURL) else {
@@ -525,7 +520,7 @@ nonisolated enum JustfileService {
                     baseAddress.advanced(by: offset),
                     bytes.count - offset
                 )
-                if written < 0 && errno == EINTR { continue }
+                if written < 0, errno == EINTR { continue }
                 guard written > 0 else { return false }
                 offset += written
             }
@@ -533,12 +528,9 @@ nonisolated enum JustfileService {
         }
     }
 
-
-
     static func command(for recipeName: String, in repositoryURL: URL, justfileURL: URL) -> String {
         "cd -- \(shellQuote(repositoryURL.path)) && just --justfile \(shellQuote(justfileURL.path)) \(shellQuote(recipeName))"
     }
-
 
     private static func shellQuote(_ value: String) -> String {
         "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"

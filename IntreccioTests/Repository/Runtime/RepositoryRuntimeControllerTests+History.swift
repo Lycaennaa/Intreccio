@@ -1,10 +1,10 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RepositoryRuntimeControllerTests {
-    func testStaleRefreshResultIsRejectedAfterNewerGeneration() throws {
+    func testStaleRefreshResultIsRejectedAfterNewerGeneration() {
         let repositoryID = UUID()
         let repository = RepoDescriptor(
             id: repositoryID,

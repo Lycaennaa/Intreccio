@@ -1,7 +1,7 @@
 import AppKit
 import CoreText
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class AppShellTests: XCTestCase {
 }

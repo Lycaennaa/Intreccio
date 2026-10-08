@@ -5,8 +5,6 @@ nonisolated enum AppMode: String, Codable, Sendable {
     case history
 }
 
-
-
 nonisolated struct PersistedState: Codable, Sendable, Equatable {
     static let currentSchemaVersion = 1
 
@@ -63,4 +61,3 @@ nonisolated struct PersistedState: Codable, Sendable, Equatable {
         uiState = try container.decode(PersistedUIState.self, forKey: .uiState)
     }
 }
-

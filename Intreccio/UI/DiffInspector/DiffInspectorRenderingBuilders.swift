@@ -1,13 +1,11 @@
-import Foundation
 import CoreText
+import Foundation
 import os
 
 nonisolated let diffPerformanceLogger = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "com.lycaennaa.intreccio",
     category: "DiffRendering"
 )
-
-
 
 nonisolated func diffChangeLabel(_ change: DiffFileChange) -> String {
     switch change {
@@ -99,7 +97,7 @@ nonisolated enum DiffAttributedStringBuilder {
         let palette = ColorPalette()
         let output = NSMutableAttributedString(string: layout.text, attributes: [
             fontKey: regular,
-            colorKey: palette.base,
+            colorKey: palette.base
         ])
         guard !Task.isCancelled else { return nil }
         for run in layout.runs {
@@ -110,7 +108,7 @@ nonisolated enum DiffAttributedStringBuilder {
             }
             var attributes: [NSAttributedString.Key: Any] = [
                 fontKey: font,
-                colorKey: palette.color(for: run.style),
+                colorKey: palette.color(for: run.style)
             ]
             if let backgroundStyle = run.backgroundStyle,
                let background = palette.background(for: backgroundStyle) {
@@ -453,7 +451,6 @@ nonisolated enum DiffRenderPreparationBuilder {
         }
         return total
     }
-
 
     private static func scopedFallback(
         for model: DiffPresentationModel,

@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class GitServiceIntegrationTests: XCTestCase {
     func testStatusCollapsesUntrackedDirectoriesAndExpandsNestedFilesOnDemand() async throws {
@@ -14,7 +14,7 @@ final class GitServiceIntegrationTests: XCTestCase {
             "nested/level-\(index % 8)/file-\(index).txt"
         } + [
             "nested/level-0/:(glob)*.txt",
-            "nested/level-0/file with spaces.txt",
+            "nested/level-0/file with spaces.txt"
         ]
         for path in expectedPaths {
             try fixture.write("untracked\n", to: path)
@@ -129,7 +129,7 @@ final class GitServiceIntegrationTests: XCTestCase {
                 error: "unknown option pathspec-from-file",
                 exitCode: 129
             ))),
-            .result(recordedGitResult(output: porcelainUntrackedStatus(directories))),
+            .result(recordedGitResult(output: porcelainUntrackedStatus(directories)))
         ])
 
         let status = try await GitService(runner: runner).localStatus(
@@ -139,7 +139,7 @@ final class GitServiceIntegrationTests: XCTestCase {
 
         let invocations = await runner.invocations
         XCTAssertEqual(invocations.count, 3)
-        XCTAssertEqual(status.changes.map { $0.path }, directories)
+        XCTAssertEqual(status.changes.map(\.path), directories)
         XCTAssertEqual(
             Array(invocations[2].arguments.prefix(5)),
             ["status", "--porcelain=v2", "-z", "--untracked-files=all", "--"]
@@ -159,7 +159,7 @@ final class GitServiceIntegrationTests: XCTestCase {
             "nested/file with spaces.txt",
             "nested/:(glob)*.txt",
             "\(specialDirectory)file with spaces.txt",
-            "\(specialDirectory)$(still-not-a-command);'quoted'\nline.txt",
+            "\(specialDirectory)$(still-not-a-command);'quoted'\nline.txt"
         ]
         let runner = RecordingGitRunner(responses: [
             .result(recordedGitResult(output: porcelainUntrackedStatus(initialPaths))),
@@ -167,7 +167,7 @@ final class GitServiceIntegrationTests: XCTestCase {
                 error: "unknown option pathspec-from-file",
                 exitCode: 129
             ))),
-            .result(recordedGitResult(output: porcelainUntrackedStatus(expandedPaths))),
+            .result(recordedGitResult(output: porcelainUntrackedStatus(expandedPaths)))
         ])
 
         let status = try await GitService(runner: runner).localStatus(
@@ -175,7 +175,7 @@ final class GitServiceIntegrationTests: XCTestCase {
             priority: .normal
         )
 
-        XCTAssertEqual(status.changes.map { $0.path }, ["outside.txt"] + expandedPaths)
+        XCTAssertEqual(status.changes.map(\.path), ["outside.txt"] + expandedPaths)
         let invocations = await runner.invocations
         XCTAssertEqual(
             Array(invocations[2].arguments.dropFirst(5)),
@@ -184,13 +184,13 @@ final class GitServiceIntegrationTests: XCTestCase {
         XCTAssertFalse(invocations[2].arguments.contains { $0.contains("still-not-a-command") })
     }
 
-    func testUnsupportedPathspecFallbackChecksCancellationBeforeLaunchingBatch() async throws {
+    func testUnsupportedPathspecFallbackChecksCancellationBeforeLaunchingBatch() async {
         let runner = RecordingGitRunner(responses: [
             .result(recordedGitResult(output: porcelainUntrackedStatus(["nested/"]))),
             .failure(.nonZeroExit(recordedGitResult(
                 error: "unknown option pathspec-from-file",
                 exitCode: 129
-            ))),
+            )))
         ])
         let task = Task {
             try await GitService(runner: runner).localStatus(
@@ -212,7 +212,7 @@ final class GitServiceIntegrationTests: XCTestCase {
         XCTAssertEqual(invocations.count, 2)
     }
 
-    func testUnsupportedPathspecFallbackPropagatesFailure() async throws {
+    func testUnsupportedPathspecFallbackPropagatesFailure() async {
         let failureResult = recordedGitResult(error: "fatal: status failed", exitCode: 128)
         let runner = RecordingGitRunner(responses: [
             .result(recordedGitResult(output: porcelainUntrackedStatus(["nested/"]))),
@@ -220,7 +220,7 @@ final class GitServiceIntegrationTests: XCTestCase {
                 error: "unknown option pathspec-from-file",
                 exitCode: 129
             ))),
-            .failure(.nonZeroExit(failureResult)),
+            .failure(.nonZeroExit(failureResult))
         ])
 
         do {

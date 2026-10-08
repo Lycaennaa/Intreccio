@@ -1,13 +1,8 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppCoordinatorTests {
-
-
-
-
-
 
 }

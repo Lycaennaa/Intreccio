@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RefreshEngineTests {
     @MainActor
@@ -33,11 +33,11 @@ extension RefreshEngineTests {
             FileSystemEvent(
                 path: outerRoot.appendingPathComponent("Nested-sibling/changed.txt").path,
                 requiresFullRescan: false
-            ),
+            )
         ]
         let router = SourceRepositoryFileEventGroupRouter(sourceIndexes: [
             outerSourceID: outerIndex,
-            nestedSourceID: nestedIndex,
+            nestedSourceID: nestedIndex
         ])
 
         let partition = router.partition(events)
@@ -52,18 +52,18 @@ extension RefreshEngineTests {
             Set(outerEvents.map(pathKey)),
             Set([
                 outerRoot.appendingPathComponent("outside/changed.txt").path,
-                outerRoot.appendingPathComponent("Nested-sibling/changed.txt").path,
+                outerRoot.appendingPathComponent("Nested-sibling/changed.txt").path
             ].map { URL(fileURLWithPath: $0).pathComponents.joined(separator: "\u{0}") })
         )
         XCTAssertEqual(
             Set(nestedEvents.map(pathKey)),
             Set([
                 nestedRoot.appendingPathComponent("repository/changed.txt").path,
-                nestedRoot.appendingPathComponent(".git", isDirectory: true).path,
+                nestedRoot.appendingPathComponent(".git", isDirectory: true).path
             ].map { URL(fileURLWithPath: $0).pathComponents.joined(separator: "\u{0}") })
         )
-        XCTAssertTrue(nestedEvents.contains { $0.eventPath.isSourceRescan })
-        XCTAssertFalse(outerEvents.contains { $0.eventPath.isSourceRescan })
+        XCTAssertTrue(nestedEvents.contains(where: \.eventPath.isSourceRescan))
+        XCTAssertFalse(outerEvents.contains(where: \.eventPath.isSourceRescan))
         let droppedPartition = router.partition([
             FileSystemEvent(
                 path: outerRoot.path,
@@ -119,7 +119,7 @@ extension RefreshEngineTests {
             FileSystemEvent(
                 path: "/work/source/nested-sibling/changed.txt",
                 requiresFullRescan: false
-            ),
+            )
         ]
         let batch = FileEventBatch(
             paths: Set(events.map(\.path)),
@@ -128,7 +128,7 @@ extension RefreshEngineTests {
         )
         let router = SourceRepositoryFileEventGroupRouter(sourceIndexes: [
             outerSourceID: outerIndex,
-            nestedSourceID: nestedIndex,
+            nestedSourceID: nestedIndex
         ])
         let partition = router.partition(events)
 
@@ -166,7 +166,7 @@ extension RefreshEngineTests {
         }
         let partition = SourceRepositoryFileEventGroupRouter(sourceIndexes: [
             outerSourceID: outerIndex,
-            nestedSourceID: nestedIndex,
+            nestedSourceID: nestedIndex
         ]).partition(
             unrelatedEvents + [FileSystemEvent(path: nestedPath, requiresFullRescan: false)]
         )
@@ -213,7 +213,7 @@ extension RefreshEngineTests {
         )
         let expected: Set<RepositoryFileEventCoverageEvent> = [
             .invalidateGitHubURL(repositoryID),
-            .refreshStatus(repositoryID),
+            .refreshStatus(repositoryID)
         ]
         let firstEvents = await controller.routeRepositoryFileEvents(batch, repositoryID: repositoryID)
         let secondEvents = await controller.routeRepositoryFileEvents(batch, repositoryID: repositoryID)

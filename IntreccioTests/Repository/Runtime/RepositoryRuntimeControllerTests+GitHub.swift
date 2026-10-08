@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RepositoryRuntimeControllerTests {
     func testStaleGitHubResultIsRejectedAfterIdentityGenerationChanges() async throws {
@@ -122,7 +122,6 @@ extension RepositoryRuntimeControllerTests {
         XCTAssertFalse(runtime.githubResolutionSnapshot.hasLookupTask)
         await runtime.finishShutdown()
     }
-
 
     func testTargetedGitHubInvalidationRejectsStaleResultWithoutCancellingOtherLookup() async throws {
         let first = makeRuntimeRepository(path: "runtime-stale-first")

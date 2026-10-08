@@ -231,7 +231,7 @@ final class RepositoryFileEventCoverageEventRouter {
         guard !Task.isCancelled, !requests.isEmpty else { return [] }
         return await withTaskGroup(of: IndexedRepositoryEvents.self) { group in
             defer { group.cancelAll() }
-            var events = Array<[RepositoryFileEventCoverageEvent]?>(
+            var events = [[RepositoryFileEventCoverageEvent]?](
                 repeating: nil,
                 count: requests.count
             )
@@ -275,7 +275,7 @@ final class RepositoryFileEventCoverageEventRouter {
                 }
             }
 
-            return events.compactMap { $0 }.flatMap { $0 }
+            return events.compactMap(\.self).flatMap(\.self)
         }
     }
 

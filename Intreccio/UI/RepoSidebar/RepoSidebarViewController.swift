@@ -41,7 +41,6 @@ final class RepoSidebarViewController: NSViewController, NSOutlineViewDataSource
         }
     }
 
-
     let coordinator: AppCoordinator
     let menuController: RepoSidebarMenuController
     let githubMenuController: RepoSidebarGitHubMenuController
@@ -58,7 +57,6 @@ final class RepoSidebarViewController: NSViewController, NSOutlineViewDataSource
     var outlineReloadCountForTesting = 0
     var badgeUpdateCountForTesting = 0
 #endif
-
 
     init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
@@ -108,7 +106,6 @@ final class RepoSidebarViewController: NSViewController, NSOutlineViewDataSource
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is unavailable")
     }
-
 
     func cancelOperationsForTermination() -> [Task<Void, Never>] {
         menuController.cancelOperationsForTermination()
@@ -185,7 +182,7 @@ final class RepoSidebarViewController: NSViewController, NSOutlineViewDataSource
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
             emptyLabel.leadingAnchor.constraint(greaterThanOrEqualTo: scrollView.leadingAnchor, constant: 16),
-            emptyLabel.trailingAnchor.constraint(lessThanOrEqualTo: scrollView.trailingAnchor, constant: -16),
+            emptyLabel.trailingAnchor.constraint(lessThanOrEqualTo: scrollView.trailingAnchor, constant: -16)
         ])
         view = container
         reload()

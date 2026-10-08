@@ -55,7 +55,6 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
     var canRestoreStash: Bool { isViewLoaded && mutationController.canRestoreStash }
     var canCommit: Bool { isViewLoaded && commitCompositionController.canCommit }
 
-
     var selectedGitPaths: [GitPath] {
         outlineView.selectedRowIndexes.compactMap { row in
             guard let node = outlineView.item(atRow: row) as? Node,
@@ -348,7 +347,6 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
     ) -> [FileChange] {
         clickedRowIsSelected ? selectedChanges : clickedChanges
     }
-
 
     nonisolated static func commitMessageComponents(_ message: String) -> (summary: String, description: String) {
         ChangesCommitController.commitMessageComponents(message)

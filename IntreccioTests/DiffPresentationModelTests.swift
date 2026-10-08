@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class DiffPresentationModelTests: XCTestCase {
     func testInvalidGitPathPreservesBytesAndEscapedDisplay() {
@@ -55,9 +55,7 @@ final class DiffPresentationModelTests: XCTestCase {
         XCTAssertEqual(HistoryMetadataLimits.default.maximumSummaryBytes, 512 * 1_024)
     }
 
-
-
-    func testPresentationModelPreservesOrderStatsAndSnapshotScope() throws {
+    func testPresentationModelPreservesOrderStatsAndSnapshotScope() {
         let first = DiffFile(
             path: "first.swift",
             originalPath: nil,
@@ -137,7 +135,7 @@ final class DiffPresentationModelTests: XCTestCase {
             "",
             "subject\0GDC-END",
             "",
-            "body\0tail",
+            "body\0tail"
         ].joined(separator: "\n")).utf8)
         let frame = Data("0123456789012345678901234567890123456789 commit \(object.count)\n".utf8)
             + object
@@ -159,7 +157,7 @@ final class DiffPresentationModelTests: XCTestCase {
             "",
             "subject",
             "",
-            "body that is longer",
+            "body that is longer"
         ].joined(separator: "\n")).utf8)
         let header = Data("0123456789012345678901234567890123456789 commit \(object.count)\n".utf8)
         let partial = header + Data(object.prefix(object.count - 5))
@@ -241,7 +239,7 @@ final class DiffPresentationModelTests: XCTestCase {
             .oversized(reason: .lineLimit(maximumLines: 10), byteCount: 11),
             .oversized(reason: .estimatedRenderSizeLimit(maximumBytes: 10), byteCount: 8),
             .unavailable(.changedDuringRead),
-            .conflicted(statusX: .unmodified, statusY: .modified),
+            .conflicted(statusX: .unmodified, statusY: .modified)
         ]
         let files = contents.enumerated().map { index, content in
             DiffFile(
@@ -284,14 +282,14 @@ final class DiffPresentationModelTests: XCTestCase {
         XCTAssertEqual(model.files[1].state, .aggregateFallback(.byteLimit(10)))
         XCTAssertEqual(model.state, .aggregateFallback(.byteLimit(10)))
     }
-    func testBatchParserKeepsValidRecordsAfterMissingObjectFrame() throws {
+    func testBatchParserKeepsValidRecordsAfterMissingObjectFrame() {
         let objectID = String(repeating: "b", count: 40)
         let object = Data(([
             "tree 0123456789012345678901234567890123456789",
             "author Alice <alice@example.com> 1700000000 +0000",
             "committer Alice <alice@example.com> 1700000000 +0000",
             "",
-            "subject",
+            "subject"
         ].joined(separator: "\n")).utf8)
         let validFrame = Data("\(objectID) commit \(object.count)\n".utf8) + object + Data([0x0A])
         let result = CommitBatchParser.parse(Data("missing-object missing\n".utf8) + validFrame)

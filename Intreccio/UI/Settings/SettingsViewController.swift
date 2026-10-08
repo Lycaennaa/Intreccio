@@ -76,7 +76,7 @@ final class SettingsViewController: NSViewController {
             .diff: diffController,
             .fileWatching: fileWatchingController,
             .openInApp: openApplicationController,
-            .foldersAndRepositories: sourcesController,
+            .foldersAndRepositories: sourcesController
         ]
     }
 
@@ -140,7 +140,7 @@ final class SettingsViewController: NSViewController {
                 sectionView.topAnchor.constraint(equalTo: contentHolder.topAnchor),
                 sectionView.leadingAnchor.constraint(equalTo: contentHolder.leadingAnchor),
                 sectionView.trailingAnchor.constraint(equalTo: contentHolder.trailingAnchor),
-                sectionView.bottomAnchor.constraint(equalTo: contentHolder.bottomAnchor),
+                sectionView.bottomAnchor.constraint(equalTo: contentHolder.bottomAnchor)
             ])
         }
 
@@ -159,7 +159,7 @@ final class SettingsViewController: NSViewController {
             card.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
             card.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
             card.widthAnchor.constraint(equalToConstant: 640),
-            card.heightAnchor.constraint(equalToConstant: 460),
+            card.heightAnchor.constraint(equalToConstant: 460)
         ])
         view = overlay
         refresh(from: latestSnapshot)
@@ -199,7 +199,7 @@ final class SettingsViewController: NSViewController {
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: sidebar.topAnchor),
             stack.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: sidebar.trailingAnchor),
+            stack.trailingAnchor.constraint(equalTo: sidebar.trailingAnchor)
         ])
         return sidebar
     }

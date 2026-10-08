@@ -17,7 +17,7 @@ final class ChangesCommitController: NSObject, NSTextViewDelegate {
                 at: NSPoint(x: textContainerInset.width + 1, y: textContainerInset.height),
                 withAttributes: [
                     .font: font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize),
-                    .foregroundColor: NSColor.placeholderTextColor,
+                    .foregroundColor: NSColor.placeholderTextColor
                 ]
             )
         }
@@ -299,7 +299,7 @@ final class ChangesCommitController: NSObject, NSTextViewDelegate {
                 descriptionLabel,
                 descriptionScrollView,
                 commitButton,
-                cancelAmendButton,
+                cancelAmendButton
             ]
         )
         controls.orientation = .vertical

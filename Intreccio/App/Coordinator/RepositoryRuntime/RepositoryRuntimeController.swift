@@ -130,7 +130,7 @@ final class RepositoryRuntimeController {
                     guard let self else { return }
                     self.handleFileEvent(event)
                 }
-            },
+            }
         ]
     }
 

@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension StateStoreTests {
     func testRoundTripPersistsVersionedSourcesSnapshotsAndUIState() async throws {

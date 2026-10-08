@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class GitServiceHistoryQueryTests: XCTestCase {
     private func selectedCommitFixture() -> Commit {
@@ -28,7 +28,6 @@ final class GitServiceHistoryQueryTests: XCTestCase {
         return patch
     }
 
-
     func testHistoryTipsBatchesNormalHeadAndUpstreamRefsInBoundedQuery() async throws {
         let localObjectID = String(repeating: "a", count: 40)
         let upstreamObjectID = String(repeating: "b", count: 40)
@@ -36,7 +35,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
             .result(recordedGitResult(output: "refs/heads/main\n")),
             .result(recordedGitResult(
                 output: "\(localObjectID)\0refs/remotes/origin/main\0\(upstreamObjectID)\n"
-            )),
+            ))
         ])
 
         let tips = try await GitService(runner: runner).historyTips(
@@ -53,7 +52,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
                 "for-each-ref",
                 "--format=%(objectname)%00%(upstream)%00%(upstream:objectname)",
                 "--count=1",
-                "refs/heads/main",
+                "refs/heads/main"
             ]
         )
         XCTAssertEqual(invocations[0].acceptedExitCodes, [0, 1])
@@ -66,7 +65,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
         let detachedHead = String(repeating: "c", count: 40)
         let detachedRunner = RecordingGitRunner(responses: [
             .result(recordedGitResult(exitCode: 1)),
-            .result(recordedGitResult(output: "\(detachedHead)\n")),
+            .result(recordedGitResult(output: "\(detachedHead)\n"))
         ])
         let detachedTips = try await GitService(runner: detachedRunner).historyTips(
             repository: URL(fileURLWithPath: "/detached")
@@ -82,7 +81,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
 
         let unbornRunner = RecordingGitRunner(responses: [
             .result(recordedGitResult(output: "refs/heads/main\n")),
-            .result(recordedGitResult()),
+            .result(recordedGitResult())
         ])
         let unbornTips = try await GitService(runner: unbornRunner).historyTips(
             repository: URL(fileURLWithPath: "/unborn")
@@ -100,7 +99,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
             .result(recordedGitResult(output: "refs/heads/main\n")),
             .result(recordedGitResult(
                 output: "\(localObjectID)\0refs/heads/other\0\(upstreamObjectID)\n"
-            )),
+            ))
         ])
 
         let unsupportedTips = try await GitService(runner: runner).historyTips(
@@ -110,7 +109,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
 
         let missingRunner = RecordingGitRunner(responses: [
             .result(recordedGitResult(output: "refs/heads/main\n")),
-            .result(recordedGitResult(output: "\(localObjectID)\0\0\n")),
+            .result(recordedGitResult(output: "\(localObjectID)\0\0\n"))
         ])
         let missingTips = try await GitService(runner: missingRunner).historyTips(
             repository: URL(fileURLWithPath: "/missing-upstream")
@@ -142,7 +141,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
             "",
             "subject",
             "",
-            "body that is cut",
+            "body that is cut"
         ].joined(separator: "\n")).utf8)
         let header = Data("\(objectID) commit \(object.count)\n".utf8)
         let partialOutput = header + Data(object.prefix(object.count - 4))
@@ -157,7 +156,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
                 stream: .standardOutput,
                 limit: partialOutput.count,
                 result: partialResult
-            )),
+            ))
         ])
 
         let page = try await GitService(runner: runner).historyPage(
@@ -181,7 +180,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
         let runner = RecordingGitRunner(responses: [
             .result(recordedGitResult(output: "not-a-frame\n")),
             .result(recordedGitResult(output: "M\0file.txt\0")),
-            .result(recordedGitResult(output: String(decoding: patch, as: UTF8.self))),
+            .result(recordedGitResult(output: String(decoding: patch, as: UTF8.self)))
         ])
 
         let details = try await GitService(runner: runner).show(
@@ -206,7 +205,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
         let runner = RecordingGitRunner(responses: [
             .failure(.nonZeroExit(recordedGitResult(error: "metadata unavailable", exitCode: 128))),
             .result(recordedGitResult(output: "M\0file.txt\0")),
-            .result(recordedGitResult(output: String(decoding: patch, as: UTF8.self))),
+            .result(recordedGitResult(output: String(decoding: patch, as: UTF8.self)))
         ])
 
         let details = try await GitService(runner: runner).show(
@@ -229,7 +228,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
         let runner = RecordingGitRunner(responses: [
             .result(.init(exitCode: 0, standardOutput: metadata, standardError: Data())),
             .failure(.nonZeroExit(recordedGitResult(error: "summary unavailable", exitCode: 128))),
-            .result(recordedGitResult(output: String(decoding: patch, as: UTF8.self))),
+            .result(recordedGitResult(output: String(decoding: patch, as: UTF8.self)))
         ])
 
         let details = try await GitService(runner: runner).show(
@@ -245,14 +244,13 @@ final class GitServiceHistoryQueryTests: XCTestCase {
         XCTAssertEqual(invocations.count, 3)
     }
 
-
-    func testShowNormalizesCancelledPatch() async throws {
+    func testShowNormalizesCancelledPatch() async {
         let selectedCommit = selectedCommitFixture()
         let metadata = historyBatchRecord(objectID: selectedCommit.objectID, parentID: selectedCommit.parentIDs.first, subject: selectedCommit.subject)
         let runner = RecordingGitRunner(responses: [
             .result(.init(exitCode: 0, standardOutput: metadata, standardError: Data())),
             .result(recordedGitResult(output: "M\0file.txt\0")),
-            .failure(.cancelled(recordedGitResult(exitCode: -1))),
+            .failure(.cancelled(recordedGitResult(exitCode: -1)))
         ])
 
         do {
@@ -267,7 +265,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
         }
     }
 
-    func testShowNormalizesCancelledRootComparisonLookup() async throws {
+    func testShowNormalizesCancelledRootComparisonLookup() async {
         let rootCommit = Commit(
             objectID: String(repeating: "a", count: 40),
             parentIDs: [],
@@ -279,7 +277,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
         )
         let runner = RecordingGitRunner(responses: [
             .result(recordedGitResult(output: "not-a-frame\n")),
-            .failure(.cancelled(recordedGitResult(exitCode: -1))),
+            .failure(.cancelled(recordedGitResult(exitCode: -1)))
         ])
 
         do {
@@ -302,7 +300,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
             "author Alice <alice@example.com> 1700000000 +0000",
             "committer Alice <alice@example.com> 1700000000 +0000",
             "",
-            "subject",
+            "subject"
         ].joined(separator: "\n")).utf8)
         let validFrame = Data("\(validID) commit \(object.count)\n".utf8) + object + Data([0x0A])
         let runner = RecordingGitRunner(responses: [
@@ -311,7 +309,7 @@ final class GitServiceHistoryQueryTests: XCTestCase {
                 exitCode: 0,
                 standardOutput: Data("\(missingID) missing\n".utf8) + validFrame,
                 standardError: Data()
-            )),
+            ))
         ])
 
         let page = try await GitService(runner: runner).historyPage(

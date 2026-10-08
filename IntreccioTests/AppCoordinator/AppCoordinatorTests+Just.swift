@@ -1,8 +1,8 @@
-import Darwin
 import AppKit
+import Darwin
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppCoordinatorTests {
     func testJustfileServiceUsesJustSummary() throws {
@@ -214,7 +214,6 @@ extension AppCoordinatorTests {
             try assertShellSyntax(commands, recipeName: recipe.name)
         }
 
-
         XCTAssertThrowsError(try JustfileService.createExample(in: repository)) { error in
             guard case .alreadyExists(let existingURL) = error as? JustfileService.CreationError else {
                 return XCTFail("Expected an already-exists error")
@@ -275,8 +274,6 @@ extension AppCoordinatorTests {
         XCTAssertFalse(JustfileService.isCurrent(invalidDiscovery, in: repository))
     }
 
-
-
     func testJustfileServiceRejectsNamedPipeWithoutBlocking() throws {
         let directory = try makeTestDirectory()
         let repository = directory.appendingPathComponent("Repo", isDirectory: true)
@@ -293,7 +290,6 @@ extension AppCoordinatorTests {
         XCTAssertEqual(discovery, .unsupportedJustfile)
         XCTAssertLessThan(Date().timeIntervalSince(start), 1)
     }
-
 
     func testUnreadableJustfileIsNotReportedAsChurn() throws {
         let directory = try makeTestDirectory()

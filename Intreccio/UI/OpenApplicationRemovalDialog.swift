@@ -124,7 +124,7 @@ final class OpenApplicationRemovalDialog: NSObject, NSTableViewDataSource, NSTab
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 6),
             label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6),
-            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
         ])
         cell.toolTip = applicationURLs[row].path
         return cell

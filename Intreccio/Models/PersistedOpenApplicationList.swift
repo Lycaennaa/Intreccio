@@ -8,7 +8,7 @@ nonisolated struct PersistedOpenApplicationList: Equatable, Sendable {
         URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"),
         URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"),
         // Pre-Catalina layout fallback; dropped by normalization if absent.
-        URL(fileURLWithPath: "/Applications/Utilities/Terminal.app"),
+        URL(fileURLWithPath: "/Applications/Utilities/Terminal.app")
     ]
 
     private static let defaultFolderApplicationPaths = Set(
@@ -163,7 +163,7 @@ nonisolated struct PersistedOpenApplicationList: Equatable, Sendable {
         var seenIdentities = Set<String>()
         let maximumDecodedEntries = maximumCount * 4
         var decodedEntryCount = 0
-        while !values.isAtEnd && decodedEntryCount < maximumDecodedEntries {
+        while !values.isAtEnd, decodedEntryCount < maximumDecodedEntries {
             decodedEntryCount += 1
             let url = try values.decode(URL.self)
             if appendNormalizedApplicationURL(

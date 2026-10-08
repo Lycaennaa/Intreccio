@@ -101,7 +101,7 @@ final class RepositoryDownloadRowView: NSView {
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
             header.widthAnchor.constraint(equalTo: stack.widthAnchor),
             detailLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            progressIndicator.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            progressIndicator.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
     }
 

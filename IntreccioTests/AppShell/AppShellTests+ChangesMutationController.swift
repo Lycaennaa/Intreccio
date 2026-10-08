@@ -1,6 +1,6 @@
 import AppKit
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppShellTests {
     func testMutationAvailabilityBelongsToMutationPolicy() {
@@ -39,7 +39,6 @@ extension AppShellTests {
         status.isRebaseInProgress = true
         XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
     }
-
 
     @MainActor
     func testMutationContextTracksCurrentSelectionAndClearsMissingStatus() {

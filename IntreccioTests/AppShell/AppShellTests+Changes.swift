@@ -1,6 +1,6 @@
 import AppKit
-import XCTest
 @testable import Intreccio
+import XCTest
 
 func makeChangesTestRepository(id: UUID = UUID(), path: String) -> RepoDescriptor {
     let url = URL(fileURLWithPath: path, isDirectory: true)
@@ -30,7 +30,6 @@ func makeChangesTestStatus(paths: [String]) -> RepoStatus {
     return status
 }
 
-
 extension AppShellTests {
     @MainActor
     func testRepositoryStatusContentCachesCountsWithoutChangingDisplayedSemantics() {
@@ -56,7 +55,7 @@ extension AppShellTests {
             change("same.txt", indexState: .added, worktreeState: .unmodified, kind: .ordinary),
             change("same.txt", indexState: .unmodified, worktreeState: .modified, kind: .ordinary),
             change("conflict.txt", indexState: .unmerged, worktreeState: .unmerged, kind: .unmerged),
-            change("ignored.txt", indexState: .unmodified, worktreeState: .unmodified, kind: .ignored),
+            change("ignored.txt", indexState: .unmodified, worktreeState: .unmodified, kind: .ignored)
         ]
 
         let content = RepositoryStatusContent(status: status)
@@ -161,7 +160,7 @@ extension AppShellTests {
                 worktreeState: .modified,
                 kind: .ordinary,
                 submoduleState: nil
-            ),
+            )
         ]
         status.stagedLineStats = DiffLineStats(
             additions: 3,
@@ -238,9 +237,5 @@ extension AppShellTests {
             "1 staged (+3 -2)   1 unstaged (+4 -1)"
         )
     }
-
-
-
-
 
 }

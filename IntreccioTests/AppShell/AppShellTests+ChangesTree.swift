@@ -1,6 +1,6 @@
 import AppKit
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppShellTests {
     @MainActor
@@ -52,7 +52,7 @@ extension AppShellTests {
         let phaseEvents: [(RefreshSchedulerEvent, String?)] = [
             (.queued(key, 2), "Line counts queued"),
             (.running(key, 3), "Calculating line counts"),
-            (.completed(key, 4, status), nil),
+            (.completed(key, 4, status), nil)
         ]
         for (event, phaseText) in phaseEvents {
             coordinator.runtime.handleRefreshEvent(event)
@@ -96,7 +96,6 @@ extension AppShellTests {
 #if DEBUG
         XCTAssertEqual(controller.commitCompositionController.stagedPathFallbackBuildCountForTesting, 0)
 #endif
-
 
         XCTAssertFalse(controller.roots.first === initialRoot)
         XCTAssertEqual(controller.selectedGitPaths, selectedPaths)
@@ -206,7 +205,7 @@ extension AppShellTests {
         let secondID = UUID()
         let repositories = [
             makeChangesTestRepository(id: firstID, path: "changes-tree-first-repository"),
-            makeChangesTestRepository(id: secondID, path: "changes-tree-second-repository"),
+            makeChangesTestRepository(id: secondID, path: "changes-tree-second-repository")
         ]
         let coordinator = AppCoordinator(
             repositoryCatalogFixture: RepositoryCatalogFixture(repositories: repositories)

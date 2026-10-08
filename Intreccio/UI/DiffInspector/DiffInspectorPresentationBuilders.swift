@@ -1,6 +1,5 @@
 import Foundation
 
-
 nonisolated extension DiffPresentationBuilder {
     static func summary(for model: DiffPresentationModel, mode: DiffSummaryMode) -> DiffSummaryModel {
         var unavailableFileCount = 0
@@ -90,7 +89,7 @@ nonisolated extension DiffPresentationBuilder {
         formatter.timeStyle = .long
         var sections = [
             commit.subject.isEmpty ? "(no subject)" : commit.subject,
-            "Commit: \(commit.objectID)\nAuthor: \(commit.authorName) <\(commit.authorEmail)>\nDate: \(formatter.string(from: commit.authoredAt))\nParents: \(parents)\nComparison basis: \(details.comparisonBasis)",
+            "Commit: \(commit.objectID)\nAuthor: \(commit.authorName) <\(commit.authorEmail)>\nDate: \(formatter.string(from: commit.authoredAt))\nParents: \(parents)\nComparison basis: \(details.comparisonBasis)"
         ]
         switch details.metadata.subject.completeness {
         case .complete:
@@ -116,7 +115,7 @@ nonisolated extension DiffPresentationBuilder {
         if details.metadata.changedFiles.files.isEmpty,
            details.metadata.changedFiles.completeness == .complete
                || details.metadata.changedFiles.completeness == .unavailable {
-            summaryFiles = details.diff.files.map { $0.diffSummary }
+            summaryFiles = details.diff.files.map(\.diffSummary)
         } else {
             summaryFiles = details.metadata.changedFiles.files
         }
@@ -225,8 +224,6 @@ nonisolated extension DiffPresentationBuilder {
         }
         return parts.joined(separator: ", ")
     }
-
-
 
     static func unavailableReasonText(_ reason: DiffFileUnavailableReason) -> String {
         switch reason {

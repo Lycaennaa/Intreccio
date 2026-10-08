@@ -61,8 +61,6 @@ final class RepoSidebarApplicationController: RepoSidebarOpenApplicationControll
         let url: URL
     }
 
-
-
     func addOpenApplicationMenu(
         to menu: NSMenu,
         title: String,
@@ -107,7 +105,7 @@ final class RepoSidebarApplicationController: RepoSidebarOpenApplicationControll
         let openAction: Selector
         let chooseAction: Selector
         if isMultiple {
-            let directories = directories.map { $0.target }
+            let directories = directories.map(\.target)
             makeTarget = { application in
                 OpenDirectoriesTarget(
                     directories: directories,
@@ -141,7 +139,6 @@ final class RepoSidebarApplicationController: RepoSidebarOpenApplicationControll
             makeTarget: makeTarget
         )
     }
-
 
     private func shouldOmitUnavailableRepositoryFolderMenu(
         repositoryIDs: [UUID],
@@ -331,7 +328,6 @@ final class RepoSidebarApplicationController: RepoSidebarOpenApplicationControll
             )
         }
     }
-
 
     func validatedRepositoryDirectory(for repositoryID: UUID) -> RepoSidebarValidatedRepositoryDirectory? {
         guard let repository = coordinator.repositories.first(where: { $0.id == repositoryID }),

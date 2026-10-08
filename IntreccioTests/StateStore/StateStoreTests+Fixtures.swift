@@ -1,9 +1,9 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension StateStoreTests {
-    func testDegenerateWindowFrameIsDroppedOnDecode() throws {
+    func testDegenerateWindowFrameIsDroppedOnDecode() {
         XCTAssertNil(PersistedUIState.sanitizedWindowFrame("{{1080, 1530}, {0, 52}}"))
         let valid = "{{120, 140}, {900, 620}}"
         XCTAssertEqual(PersistedUIState.sanitizedWindowFrame(valid), valid)
@@ -55,7 +55,7 @@ extension StateStoreTests {
                 aliasURL,
                 applicationURL,
                 invalidApplicationURL,
-                URL(string: "https://example.com/Editor.app")!,
+                URL(string: "https://example.com/Editor.app")!
             ]),
             [applicationURL]
         )
@@ -64,7 +64,7 @@ extension StateStoreTests {
                 missingURL,
                 missingURL,
                 directory.appendingPathComponent("NotAnApplication"),
-                URL(string: "https://example.com/Missing.app")!,
+                URL(string: "https://example.com/Missing.app")!
             ]),
             [missingURL]
         )

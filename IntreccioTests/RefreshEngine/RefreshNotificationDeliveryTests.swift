@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @MainActor
 private final class RefreshNotificationTestDelegate: RepositoryRuntimeControllerDelegate {
@@ -71,7 +71,7 @@ final class RefreshNotificationDeliveryTests: XCTestCase {
                 runner: RecordingGitRunner(
                     responses: [
                         .result(recordedGitResult()),
-                        .result(recordedGitResult()),
+                        .result(recordedGitResult())
                     ]
                 )
             ),

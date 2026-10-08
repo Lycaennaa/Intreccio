@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppCoordinatorTests {
     func testSelectingCurrentRepositoryDoesNotRepublish() async throws {
@@ -39,7 +39,6 @@ extension AppCoordinatorTests {
         coordinator.selectRepository(nil)
         XCTAssertEqual(windowController.window?.title, "Intreccio")
     }
-
 
     func testPinnedRepositoryPersistsAndIsRemovedWhenRepositoryIsExcluded() async throws {
         let directory = try makeTestDirectory()
@@ -165,7 +164,6 @@ extension AppCoordinatorTests {
         )
         XCTAssertEqual(coordinator.quickOpenFilePaths(for: repositoryID), existingPaths)
     }
-
 
     func testSidebarPinMenuMovesRepositoryIntoPinnedSectionWithoutDuplication() async throws {
         let directory = try makeTestDirectory()
@@ -365,7 +363,7 @@ extension AppCoordinatorTests {
         let rootCell = try XCTUnwrap(outlineView.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTableCellView)
         let folderIcon = rootCell.subviews
             .compactMap { $0 as? NSStackView }
-            .flatMap { $0.arrangedSubviews }
+            .flatMap(\.arrangedSubviews)
             .compactMap { $0 as? NSImageView }
             .first
         XCTAssertNotNil(folderIcon?.image)
@@ -435,9 +433,6 @@ extension AppCoordinatorTests {
         }
         XCTAssertNil(coordinator.state.uiState.selectedRepoID)
     }
-
-
-
 
     func testRestoreAndRemovalCannotResurrectDeletedSource() async throws {
         let directory = try makeTestDirectory()

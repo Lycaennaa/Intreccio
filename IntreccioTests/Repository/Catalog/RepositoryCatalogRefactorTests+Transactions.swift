@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RepositoryCatalogRefactorTests {
     func testBeforeAcceptanceCommitPersistsBeforeReconciliation() async throws {
@@ -216,7 +216,6 @@ extension RepositoryCatalogRefactorTests {
         XCTAssertEqual(try Data(contentsOf: stateFile), originalCatalog)
         XCTAssertEqual(try Data(contentsOf: uiFileURL), originalUI)
     }
-
 
     func testSourcePreparationsUseExplicitPersistenceOrder() async throws {
         let workspace = try makeTestDirectory()

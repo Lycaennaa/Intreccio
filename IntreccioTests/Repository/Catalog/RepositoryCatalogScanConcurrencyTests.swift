@@ -1,5 +1,5 @@
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @MainActor
 final class RepositoryCatalogScanConcurrencyTests: XCTestCase {
@@ -37,7 +37,7 @@ final class RepositoryCatalogScanConcurrencyTests: XCTestCase {
         XCTAssertEqual(finalStats.startedCount, roots.count)
         XCTAssertEqual(transaction.change.state.watchRoots.map(\.id), roots.map(\.id))
     }
-    func testNearBudgetRestoreStopsAfterCandidateBudget() async throws {
+    func testNearBudgetRestoreStopsAfterCandidateBudget() async {
         let roots = makeWatchRoots(count: PersistedCatalogBudget.maxEntryCount - 1)
         let probe = ScanProbe()
         let (operations, catalogState) = makeOperations { source in
@@ -156,7 +156,6 @@ final class RepositoryCatalogScanConcurrencyTests: XCTestCase {
         XCTAssertEqual(finalStats.startedCount, roots.count)
     }
 
-
     func testWatchRootResultsApplyInSourceOrderAfterOutOfOrderCompletion() async throws {
         let roots = makeWatchRoots(count: 3)
         let indices = Dictionary(uniqueKeysWithValues: roots.enumerated().map { ($1.id, $0) })
@@ -238,7 +237,7 @@ final class RepositoryCatalogScanConcurrencyTests: XCTestCase {
         XCTAssertEqual(transaction.persistenceOrder, .afterAcceptance(clearPersistenceErrorOnSuccess: true))
     }
 
-    func testCancellationDoesNotAcceptWatchRootResults() async throws {
+    func testCancellationDoesNotAcceptWatchRootResults() async {
         let roots = makeWatchRoots(count: 4)
         let indices = Dictionary(uniqueKeysWithValues: roots.enumerated().map { ($1.id, $0) })
         let probe = ScanProbe()
@@ -275,7 +274,7 @@ final class RepositoryCatalogScanConcurrencyTests: XCTestCase {
         XCTAssertTrue(catalogState.repositories.isEmpty)
     }
 
-    func testStaleGenerationDoesNotAcceptWatchRootResults() async throws {
+    func testStaleGenerationDoesNotAcceptWatchRootResults() async {
         let roots = makeWatchRoots(count: 4)
         let indices = Dictionary(uniqueKeysWithValues: roots.enumerated().map { ($1.id, $0) })
         let probe = ScanProbe()

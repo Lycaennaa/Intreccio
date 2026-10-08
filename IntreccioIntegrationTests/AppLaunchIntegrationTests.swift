@@ -14,7 +14,7 @@ final class AppLaunchIntegrationTests: XCTestCase {
         let didExit = DispatchSemaphore(value: 0)
         process.executableURL = executable
         process.environment = ProcessInfo.processInfo.environment.merging([
-            "INTRECCIO_TEST_INSTANCE": "1",
+            "INTRECCIO_TEST_INSTANCE": "1"
         ]) { _, testValue in testValue }
         process.terminationHandler = { _ in didExit.signal() }
 

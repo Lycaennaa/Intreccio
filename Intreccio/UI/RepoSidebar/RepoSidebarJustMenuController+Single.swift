@@ -53,7 +53,6 @@ final class RepoSidebarJustMenuSingleImplementation: NSObject {
         recipeTasks.values.forEach { $0.cancel() }
     }
 
-
     func updateMenuContext(_ context: RepoSidebarMenuContext) {
         cancelPendingRecipeActions()
         menuContext = context
@@ -94,7 +93,6 @@ final class RepoSidebarJustMenuSingleImplementation: NSObject {
         )
         return submenu
     }
-
 
     func makeRepositoryJustMenu(
         for repository: RepoDescriptor,
@@ -304,8 +302,6 @@ final class RepoSidebarJustMenuSingleImplementation: NSObject {
         }
     }
 
-
-
     @objc func createJustfile(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? CreateTarget,
               isCurrentContext(target.context, repositoryID: target.repositoryID) else { return }
@@ -341,7 +337,6 @@ final class RepoSidebarJustMenuSingleImplementation: NSObject {
               isCurrentContext(target.context, repositoryID: target.repositoryID) else { return }
         presentJustInfo(for: target.context)
     }
-
 
     func presentJustInfo(for context: RepoSidebarMenuContext) {
         presentMessage(

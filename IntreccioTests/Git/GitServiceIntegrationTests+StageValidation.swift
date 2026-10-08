@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @MainActor
 extension GitServiceIntegrationTests {
@@ -58,6 +58,5 @@ extension GitServiceIntegrationTests {
             XCTAssertEqual(error, .staleMutationSelection(["missing.txt"]))
         }
     }
-
 
 }

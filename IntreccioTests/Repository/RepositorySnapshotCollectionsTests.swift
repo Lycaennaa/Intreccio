@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 private struct SnapshotCollectionRandomNumberGenerator: RandomNumberGenerator {
     private var state: UInt64
@@ -64,8 +64,8 @@ final class RepositorySnapshotCollectionsTests: XCTestCase {
 
         XCTAssertEqual(map.keys, [first, second])
         XCTAssertEqual(map.values, [1, 2])
-        XCTAssertEqual(map.entries.map { $0.key }, [first, second])
-        XCTAssertEqual(map.entries.map { $0.value }, [1, 2])
+        XCTAssertEqual(map.entries.map(\.key), [first, second])
+        XCTAssertEqual(map.entries.map(\.value), [1, 2])
     }
 
     func testSetMatchesSetModelAcrossRandomizedOperations() {
@@ -117,8 +117,8 @@ final class RepositorySnapshotCollectionsTests: XCTestCase {
         XCTAssertEqual(actual.isEmpty, expected.isEmpty, "step \(step)", file: file, line: line)
         XCTAssertEqual(actual.keys, orderedKeys, "step \(step)", file: file, line: line)
         XCTAssertEqual(actual.values, orderedValues, "step \(step)", file: file, line: line)
-        XCTAssertEqual(actual.entries.map { $0.key }, orderedKeys, "step \(step)", file: file, line: line)
-        XCTAssertEqual(actual.entries.map { $0.value }, orderedValues, "step \(step)", file: file, line: line)
+        XCTAssertEqual(actual.entries.map(\.key), orderedKeys, "step \(step)", file: file, line: line)
+        XCTAssertEqual(actual.entries.map(\.value), orderedValues, "step \(step)", file: file, line: line)
         XCTAssertEqual(actual, RepositorySnapshotMap(expected), "step \(step)", file: file, line: line)
 #if DEBUG
         XCTAssertTrue(actual.isValidForTesting, "step \(step)", file: file, line: line)

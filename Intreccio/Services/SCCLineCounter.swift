@@ -151,7 +151,7 @@ actor SCCLineCounter: SLOCCounter {
                     "--no-complexity", "--no-size", "--no-cocomo",
                     "--no-gitignore", "--no-gitmodule", "--no-scc-ignore",
                     "--no-gen", "--no-min",
-                    directory.path,
+                    directory.path
                 ],
                 outputLimit: 256 * 1_024,
                 timeout: .seconds(15),

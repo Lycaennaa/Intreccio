@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RepositoryRuntimeControllerTests {
     func testRepositoryFileEventRoutesRescanAndSchedulesRefreshLocally() async throws {
@@ -213,7 +213,7 @@ extension RepositoryRuntimeControllerTests {
                 lastResolvedPath: disjointRoot.path,
                 resourceID: nil,
                 exclusions: []
-            ),
+            )
         ]
         let nestedRepositoryURL = nestedRoot.appendingPathComponent("repository", isDirectory: true)
         let nestedSource = RepositorySource.watchRoot(
@@ -446,8 +446,7 @@ extension RepositoryRuntimeControllerTests {
         await runtime.finishShutdown()
     }
 
-
-    func testStandaloneRepositoryRetainsIndependentCoverage() async throws {
+    func testStandaloneRepositoryRetainsIndependentCoverage() async {
         let repository = makeRuntimeRepository(path: "standalone-coverage-repository")
         let delegate = RuntimeTestDelegate(repositories: [repository])
         let runtime = RepositoryRuntimeController(gitService: GitService())

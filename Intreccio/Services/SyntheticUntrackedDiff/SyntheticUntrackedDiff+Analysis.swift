@@ -1,5 +1,5 @@
-import Darwin
 import CryptoKit
+import Darwin
 import Foundation
 nonisolated struct FileContentFingerprint: Sendable, Equatable {
     let digest: Data?

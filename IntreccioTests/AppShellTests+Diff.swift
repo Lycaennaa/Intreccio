@@ -1,6 +1,6 @@
 import AppKit
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppShellTests {
     @MainActor
@@ -60,7 +60,7 @@ extension AppShellTests {
         let diff = GitDiff(
             files: [
                 makeDiffFile(path: "Sources/First\n====\n.swift", line: "let first = 1"),
-                makeDiffFile(path: longPath, line: "let second = 2"),
+                makeDiffFile(path: longPath, line: "let second = 2")
             ],
             fallback: nil,
             sourceByteCount: 100,
@@ -268,7 +268,7 @@ extension AppShellTests {
         let diff = GitDiff(
             files: [
                 makeDiffFile(path: "Sources/First.swift", line: "let first = 1"),
-                makeDiffFile(path: "Sources/Second.swift", line: "let second = 2"),
+                makeDiffFile(path: "Sources/Second.swift", line: "let second = 2")
             ],
             fallback: nil,
             sourceByteCount: 100,
@@ -321,7 +321,7 @@ extension AppShellTests {
         }
     }
 
-    func testDiffFilePickerPreparesMaximumSelectionOffMain() async throws {
+    func testDiffFilePickerPreparesMaximumSelectionOffMain() async {
         let files = (0..<4_096).map { index in
             DiffFile(path: "Sources/File\(index).bin", originalPath: nil, change: .modified, content: .binary(byteCount: 1))
         }
@@ -368,7 +368,6 @@ extension AppShellTests {
         XCTAssertTrue(textView.isHidden)
         XCTAssertTrue(textView.string.isEmpty)
     }
-
 
     @MainActor
     func testDiffInspectorRetainsInteractionStateWhileRefreshing() async throws {

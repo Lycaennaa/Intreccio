@@ -1,5 +1,5 @@
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class OperationFailureTests: XCTestCase {
     func testGitFailurePreservesExactDetailsAndProvidesActionableCopyText() {

@@ -65,7 +65,6 @@ actor RefreshScheduler {
         }
     }
 
-
     private struct Running {
         let generation: UInt64
         let task: Task<Void, Never>
@@ -259,8 +258,7 @@ actor RefreshScheduler {
         let task = Task { [operation, eventHandler] in
             await eventHandler(.running(request.key, request.generation))
             let result: Result<RepoStatus, Error>
-            do { result = .success(try await operation(RefreshOperationRequest(url: request.url, isSelected: selected, refreshUpstream: request.refreshUpstream, includeDiffStats: includeDiffStats))) }
-            catch { result = .failure(error) }
+            do { result = .success(try await operation(RefreshOperationRequest(url: request.url, isSelected: selected, refreshUpstream: request.refreshUpstream, includeDiffStats: includeDiffStats))) } catch { result = .failure(error) }
             await self.finished(request, result: result)
         }
         running[request.key] = Running(

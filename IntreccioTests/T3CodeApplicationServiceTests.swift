@@ -1,5 +1,5 @@
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @MainActor
 final class T3CodeApplicationServiceTests: XCTestCase {
@@ -92,7 +92,6 @@ final class T3CodeApplicationServiceTests: XCTestCase {
         XCTAssertTrue(T3CodeApplicationService.versionIsNewer("1.10.0", than: "1.9.0"))
         XCTAssertFalse(T3CodeApplicationService.versionIsNewer("1.9.0", than: "1.10.0"))
     }
-
 
     func testApplicationRevalidationResolvesReplacementAtSameURL() {
         let url = URL(fileURLWithPath: "/Applications/T3 Code.app")

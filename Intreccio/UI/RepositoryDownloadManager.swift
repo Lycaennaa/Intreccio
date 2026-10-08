@@ -35,7 +35,7 @@ final class RepositoryDownloadManager: NSObject, NSWindowDelegate {
     private var nextOrder: UInt64 = 0
     private var outsideClickMonitor: Any?
 
-    var isBusy: Bool { jobs.values.contains { $0.status.isActive } }
+    var isBusy: Bool { jobs.values.contains(where: \.status.isActive) }
 
     init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
@@ -274,7 +274,7 @@ final class RepositoryDownloadManager: NSObject, NSWindowDelegate {
             jobsStack.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
             jobsStack.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
             jobsStack.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor, constant: 2),
-            jobsStack.bottomAnchor.constraint(equalTo: scrollView.contentView.bottomAnchor, constant: -2),
+            jobsStack.bottomAnchor.constraint(equalTo: scrollView.contentView.bottomAnchor, constant: -2)
         ])
         panel.contentView = contentView
         self.panel = panel

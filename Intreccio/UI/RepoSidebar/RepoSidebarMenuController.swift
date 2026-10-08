@@ -179,7 +179,6 @@ final class RepoSidebarMenuController: NSObject {
         )
     }
 
-
     private func addSingleRepositoryStateItems(
         to menu: NSMenu,
         repository: RepoDescriptor
@@ -256,7 +255,6 @@ final class RepoSidebarMenuController: NSObject {
         justMenuController.updateMenuContext(context)
     }
 
-
     func waitForJustMenuDiscovery() async {
         await justMenuController.waitForPendingDiscovery()
     }
@@ -313,7 +311,6 @@ final class RepoSidebarMenuController: NSObject {
         pasteboard.clearContents()
         pasteboard.setString(paths.joined(separator: "\n"), forType: .string)
     }
-
 
     @objc func setSelectedRepositoriesPinned(_ sender: NSMenuItem) {
         guard let target = selectionTarget(from: sender) else { return }

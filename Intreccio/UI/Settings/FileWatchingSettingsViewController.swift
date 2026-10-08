@@ -5,7 +5,7 @@ final class FileWatchingSettingsViewController: NSViewController, SettingsSectio
     static let debounceOptions: [(label: String, milliseconds: Int)] = [
         ("Fast (250 ms)", 250),
         ("Standard (500 ms)", 500),
-        ("Relaxed (1 s)", 1_000),
+        ("Relaxed (1 s)", 1_000)
     ]
 
     private let coordinator: AppCoordinator
@@ -22,9 +22,9 @@ final class FileWatchingSettingsViewController: NSViewController, SettingsSectio
     override func loadView() {
         debouncePopup.target = self
         debouncePopup.action = #selector(changeDebounce(_:))
-        debouncePopup.addItems(withTitles: Self.debounceOptions.map { $0.label })
+        debouncePopup.addItems(withTitles: Self.debounceOptions.map(\.label))
         view = SettingsUI.section(title: "File Watching", views: [
-            SettingsUI.row(SettingsUI.label("Refresh debounce"), debouncePopup),
+            SettingsUI.row(SettingsUI.label("Refresh debounce"), debouncePopup)
         ])
     }
 
@@ -41,4 +41,3 @@ final class FileWatchingSettingsViewController: NSViewController, SettingsSectio
         coordinator.setFileWatchDebounce(milliseconds: Self.debounceOptions[index].milliseconds)
     }
 }
-

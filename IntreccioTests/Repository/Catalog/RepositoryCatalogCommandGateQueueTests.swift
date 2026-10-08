@@ -1,5 +1,5 @@
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @MainActor
 final class RepositoryCatalogCommandGateQueueTests: XCTestCase {
@@ -150,7 +150,6 @@ final class RepositoryCatalogCommandGateQueueTests: XCTestCase {
         let startedValues = await started.values
         XCTAssertEqual(startedValues, ["first", "second", "third", "following"])
     }
-
 
     func testCatalogCommandGateCoalescingReportsRejectionWithoutDroppingQueuedWork() async throws {
         let gate = RepositoryCatalogCommandGate(maximumWaiters: 1)

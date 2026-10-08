@@ -27,7 +27,7 @@ final class RepositorySourcesSettingsViewController: NSViewController, SettingsS
             ("Add Root Folder…", #selector(addSourceFolder(_:))),
             ("Add Repository…", #selector(addSourceRepository(_:))),
             ("Create Local Repository…", #selector(createLocalRepository(_:))),
-            ("Clone Repository…", #selector(cloneSourceRepository(_:))),
+            ("Clone Repository…", #selector(cloneSourceRepository(_:)))
         ]
         for (title, action) in actions {
             let item = addSources.menu?.addItem(withTitle: title, action: action, keyEquivalent: "")
@@ -35,7 +35,7 @@ final class RepositorySourcesSettingsViewController: NSViewController, SettingsS
         }
         view = SettingsUI.section(title: "Folders & Repositories", views: [
             SettingsUI.row(addSources),
-            sourcesStack,
+            sourcesStack
         ])
     }
 
@@ -189,4 +189,3 @@ final class RepositorySourcesSettingsViewController: NSViewController, SettingsS
         }
     }
 }
-

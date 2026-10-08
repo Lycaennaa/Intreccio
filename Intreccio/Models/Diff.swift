@@ -19,26 +19,26 @@ nonisolated enum DiffKind: Sendable, Equatable {
 nonisolated enum SourceCodeFileClassifier {
     static let extensions = [
         "swift", "py", "js", "ts", "jsx", "tsx", "c", "h", "cpp", "hpp", "m", "mm",
-        "java", "kt", "rb", "go", "rs", "php", "sh", "sql",
+        "java", "kt", "rb", "go", "rs", "php", "sh", "sql"
     ]
     private static let excludedExtensions: Set<String> = [
         "json", "json5", "jsonc", "jsonl", "yaml", "yml", "txt", "md", "markdown", "csv", "tsv",
         "cfg", "conf", "config", "env", "ini", "lock", "pbxproj", "plist", "properties", "resolved",
         "sln", "csproj", "fsproj", "iml", "props", "resx", "targets", "vcxproj", "filters", "xcconfig",
-        "code-workspace", "sublime-project",
+        "code-workspace", "sublime-project"
     ]
     private static let excludedDirectoryNames: Set<String> = [
         "build", "builds", "carthage", "coverage", "derived", "deriveddata", "dist", "gen", "generated",
-        "node_modules", "out", "pods", "third-party", "third_party", "vendor", "vendors",
+        "node_modules", "out", "pods", "third-party", "third_party", "vendor", "vendors"
     ]
     private static let excludedFileNames: Set<String> = [
         ".babelrc", ".dockerignore", ".editorconfig", ".env", ".eslintrc", ".gitattributes", ".gitignore",
         ".gitmodules", ".npmrc", ".nvmrc", ".prettierrc", ".yarnrc", "dockerfile", "gnumakefile",
-        "makefile", "readme", "license", "copying", "notice", "changelog", "todo", "to-do",
+        "makefile", "readme", "license", "copying", "notice", "changelog", "todo", "to-do"
     ]
     private static let excludedLanguages: Set<String> = [
         "asciidoc", "csv", "ini", "json", "json5", "jsonc", "jsonl", "markdown",
-        "plain text", "restructuredtext", "toml", "tsv", "yaml",
+        "plain text", "restructuredtext", "toml", "tsv", "yaml"
     ]
 
     static func sccFileName(for path: GitPath) -> String? {
@@ -148,7 +148,6 @@ nonisolated enum DiffLineStatsParser {
         SourceCodeFileClassifier.sccFileName(for: GitPath(bytes: Data(path))) != nil
     }
 
-
     private static func isNonCodePath(_ path: Data.SubSequence) -> Bool {
         SourceCodeFileClassifier.sccFileName(for: GitPath(bytes: Data(path))) == nil
     }
@@ -156,7 +155,6 @@ nonisolated enum DiffLineStatsParser {
     private static func isBinaryCount(_ value: Data.SubSequence) -> Bool {
         value.count == 1 && value.first == UInt8(ascii: "-")
     }
-
 
     private static func add(_ value: Int, to total: inout Int) -> Bool {
         let result = total.addingReportingOverflow(value)
@@ -432,9 +430,7 @@ nonisolated extension FileChange {
         case .unmerged: .conflicted
         case .untracked: .untracked
         case .ordinary, .ignored:
-            if indexState == .added { .added }
-            else if indexState == .deleted || worktreeState == .deleted { .deleted }
-            else { .modified }
+            if indexState == .added { .added } else if indexState == .deleted || worktreeState == .deleted { .deleted } else { .modified }
         }
     }
 

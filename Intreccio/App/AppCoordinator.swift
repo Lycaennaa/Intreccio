@@ -13,7 +13,6 @@ final class AppCoordinator {
         let previousUsesDefaultMessage: Bool
     }
 
-
     let gitService: GitService
     let catalog: RepositoryCatalog
     let runtime: RepositoryRuntimeController
@@ -155,4 +154,3 @@ final class AppCoordinator {
         }
     }
 }
-

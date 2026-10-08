@@ -52,7 +52,7 @@ final class DiffFilePickerMenuItemView: NSView {
         statusLabel.stringValue = entry.statusText
         pathLabel.stringValue = entry.pathTitle
         detailLabel.stringValue = [entry.countText, entry.stateText]
-            .compactMap { $0 }
+            .compactMap(\.self)
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
         configure(statusLabel, bold: true, compressionResistance: .required)
@@ -78,7 +78,7 @@ final class DiffFilePickerMenuItemView: NSView {
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 2),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2)
         ])
     }
 

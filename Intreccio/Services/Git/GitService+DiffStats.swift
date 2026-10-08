@@ -417,7 +417,7 @@ extension GitService {
         if let untrackedDiffStats {
             guard statsAccumulator.add(untrackedDiffStats) else { return nil }
         }
-        if precomputedTrackedWorktreeFingerprint != nil && !skipTrackedFinalConsistencyCheck {
+        if precomputedTrackedWorktreeFingerprint != nil, !skipTrackedFinalConsistencyCheck {
             guard let currentWorktreeFingerprint = try worktreeFingerprints(
                 repository: repository,
                 changes: selected,

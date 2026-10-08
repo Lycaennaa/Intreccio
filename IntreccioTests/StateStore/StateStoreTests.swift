@@ -1,7 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class StateStoreTests: XCTestCase {
 }
-

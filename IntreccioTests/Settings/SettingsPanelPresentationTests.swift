@@ -1,5 +1,5 @@
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @MainActor
 final class SettingsPanelPresentationTests: XCTestCase {

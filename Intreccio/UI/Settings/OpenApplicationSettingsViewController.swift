@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class OpenApplicationSettingsViewController: NSViewController, SettingsSectionController {
     private static let textFileExtensions = [
-        "txt", "md", "log", "csv", "json", "yaml", "yml", "xml", "html", "css", "ini", "cfg",
+        "txt", "md", "log", "csv", "json", "yaml", "yml", "xml", "html", "css", "ini", "cfg"
     ]
     private static let sourceFileExtensions = SourceCodeFileClassifier.extensions
 
@@ -86,7 +86,7 @@ final class OpenApplicationSettingsViewController: NSViewController, SettingsSec
             SettingsUI.row(SettingsUI.label("Open folder menu"), folderPreviewPopup, removeFolderAppsButton),
             folderAppsStack,
             SettingsUI.row(SettingsUI.label("Open file menu"), fileGroupPopup, removeFileAppsButton),
-            fileAppsStack,
+            fileAppsStack
         ])
     }
 
@@ -337,4 +337,3 @@ final class OpenApplicationSettingsViewController: NSViewController, SettingsSec
         stack.addArrangedSubview(view)
     }
 }
-

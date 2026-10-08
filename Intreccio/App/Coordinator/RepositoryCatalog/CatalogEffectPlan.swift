@@ -1,6 +1,5 @@
 import Foundation
 
-
 nonisolated struct CatalogMessagePolicy: Sendable, Equatable {
     let clearsStatusMessage: Bool
     let clearsErrorMessage: Bool
@@ -106,7 +105,7 @@ nonisolated struct CatalogEffectPlan: Sendable, Equatable {
                 .setSelectedRepository,
                 .scheduleGitHubURLLookups(target: githubURLTarget, forceRefresh: true),
                 .enqueueStatusRefreshes(target: .changed, refreshUpstream: refreshUpstream),
-                .reconcileRepositories(updateEventCoverage: true),
+                .reconcileRepositories(updateEventCoverage: true)
             ],
         )
     }
@@ -124,7 +123,7 @@ nonisolated struct CatalogEffectPlan: Sendable, Equatable {
             runtimeSteps: [
                 .scheduleGitHubURLLookups(target: .changed, forceRefresh: true),
                 .reconcileRepositories(updateEventCoverage: true),
-                .enqueueStatusRefreshes(target: .changed, refreshUpstream: false),
+                .enqueueStatusRefreshes(target: .changed, refreshUpstream: false)
             ]
         )
     }
@@ -142,7 +141,7 @@ nonisolated struct CatalogEffectPlan: Sendable, Equatable {
             runtimeSteps: [
                 .scheduleGitHubURLLookups(target: .all, forceRefresh: false),
                 .updateEventCoverage,
-                .enqueueStatusRefreshes(target: .all, refreshUpstream: true),
+                .enqueueStatusRefreshes(target: .all, refreshUpstream: true)
             ]
         )
     }
@@ -166,7 +165,7 @@ nonisolated struct CatalogEffectPlan: Sendable, Equatable {
                     clearRequestState: false,
                     synchronizeSelectedRepository: false
                 ),
-                .updateEventCoverage,
+                .updateEventCoverage
             ]
         )
     }
@@ -187,7 +186,7 @@ nonisolated struct CatalogEffectPlan: Sendable, Equatable {
                     clearRequestState: true,
                     synchronizeSelectedRepository: true
                 ),
-                .updateEventCoverage,
+                .updateEventCoverage
             ]
         )
     }

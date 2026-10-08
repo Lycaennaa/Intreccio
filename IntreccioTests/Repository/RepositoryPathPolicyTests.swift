@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class RepositoryPathPolicyTests: XCTestCase {
     func testRelativePathNormalizationAndExclusionContainmentParity() throws {

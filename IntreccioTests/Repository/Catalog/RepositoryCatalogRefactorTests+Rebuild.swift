@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RepositoryCatalogRefactorTests {
     func testRebuildPreservesSnapshotMatchingParityAcrossConflictsAndUnmatchedSnapshots() {
@@ -116,7 +116,7 @@ extension RepositoryCatalogRefactorTests {
                 canonicalPath: "/removed",
                 resourceID: "removed-resource",
                 availability: .available
-            ),
+            )
         ]
         let scan = RepoScanResult(
             repositories: [
@@ -125,7 +125,7 @@ extension RepositoryCatalogRefactorTests {
                 scanned("/workspace/conflict", relativePath: "conflict", resourceID: "new-resource"),
                 scanned("/workspace/beta", relativePath: "beta", resourceID: "shared-resource"),
                 scanned("/workspace/alpha", relativePath: "alpha", resourceID: "alpha-resource"),
-                scanned("/workspace/path", relativePath: "path", resourceID: nil),
+                scanned("/workspace/path", relativePath: "path", resourceID: nil)
             ],
             warnings: [],
             incompleteReason: nil,
@@ -144,14 +144,14 @@ extension RepositoryCatalogRefactorTests {
             [alphaID, betaID, conflictPathID, pathResourceID, standaloneSnapshotID, missingID]
         )
         XCTAssertEqual(
-            result.repositories.map { $0.canonicalURL.path },
+            result.repositories.map(\.canonicalURL.path),
             [
                 "/workspace/alpha",
                 "/workspace/beta",
                 "/workspace/conflict",
                 "/workspace/path",
                 "/standalone",
-                "/workspace/missing",
+                "/workspace/missing"
             ]
         )
         XCTAssertEqual(result.snapshots, [
@@ -210,7 +210,7 @@ extension RepositoryCatalogRefactorTests {
                 canonicalPath: "/workspace/excluded/child",
                 resourceID: "excluded-resource",
                 availability: .available
-            ),
+            )
         ])
         XCTAssertFalse(result.repositories.contains { $0.id == conflictResourceID })
         XCTAssertFalse(result.repositories.contains { $0.id == excludedID })

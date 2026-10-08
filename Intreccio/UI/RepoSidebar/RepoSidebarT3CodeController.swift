@@ -56,7 +56,6 @@ final class RepoSidebarT3CodeController: NSObject {
         super.init()
     }
 
-
     func updateMenuContext(_ context: RepoSidebarMenuContext) {
         contextGeneration &+= 1
         cancelActiveOperations()

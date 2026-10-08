@@ -68,8 +68,7 @@ nonisolated enum RepositoryPathPolicy {
             .split(separator: "/", omittingEmptySubsequences: true)
             .reduce(into: [Substring]()) { components, component in
                 if component == "." { return }
-                if component == ".." { _ = components.popLast() }
-                else { components.append(component) }
+                if component == ".." { _ = components.popLast() } else { components.append(component) }
             }
             .joined(separator: "/")
         return caseSensitive ? normalized : normalized.lowercased()

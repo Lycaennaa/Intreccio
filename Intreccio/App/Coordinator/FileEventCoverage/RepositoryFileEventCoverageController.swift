@@ -73,7 +73,6 @@ final class RepositoryFileEventCoverageController {
         )
         self.eventStream = eventStream
 
-
         let readiness = RepositoryFileEventCoverageReadiness()
         self.readiness = readiness
         let topology = RepositoryFileEventCoverageWatcherTopology(
@@ -322,8 +321,6 @@ final class RepositoryFileEventCoverageController {
         await TaskCompletionDrain.waitForCompletion(tasks)
         eventRoutingTasks.removeAll()
     }
-
-
 
     private func handleReadinessChange() async {
         aggregate.invalidate()

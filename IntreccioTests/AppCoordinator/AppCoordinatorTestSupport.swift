@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @MainActor
 extension AppCoordinatorTests {
@@ -14,12 +14,10 @@ extension AppCoordinatorTests {
         return coordinator
     }
 
-
     func initializeRepository(at url: URL) throws {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try runGit(at: url, arguments: ["init", "-b", "main"])
     }
-
 
     func findOutlineView(in view: NSView) -> NSOutlineView? {
         if let outlineView = view as? NSOutlineView { return outlineView }
@@ -28,7 +26,6 @@ extension AppCoordinatorTests {
         }
         return nil
     }
-
 
 }
 

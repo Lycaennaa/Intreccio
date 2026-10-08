@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class CommitParserTests: XCTestCase {
     func testParsesRootMergeUnicodeAndControlSeparators() throws {
@@ -49,7 +49,7 @@ final class CommitParserTests: XCTestCase {
                 authoredAt: date,
                 subject: "Fix paging",
                 body: ""
-            ),
+            )
         ]
         let state = SelectedHistoryState(commits: commits)
 

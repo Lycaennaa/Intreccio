@@ -231,7 +231,7 @@ extension GitService {
             let paths: [GitPath]
             switch change.kind {
             case .renamed, .copied:
-                paths = [change.gitPath, change.originalGitPath].compactMap { $0 }
+                paths = [change.gitPath, change.originalGitPath].compactMap(\.self)
             default:
                 paths = [change.gitPath]
             }
@@ -255,10 +255,8 @@ extension GitService {
             let pathspecBytes = pathspecs.reduce(0) { $0 + $1.utf8.count + 1 }
             guard pathspecs.count <= diffPathspecCountLimit,
                   pathspecBytes <= diffPathspecByteLimit else { return nil }
-            if !batch.isEmpty && (
-                batch.count + pathspecs.count > diffPathspecCountLimit
-                    || byteCount + pathspecBytes > diffPathspecByteLimit
-            ) {
+            if !batch.isEmpty, batch.count + pathspecs.count > diffPathspecCountLimit
+                    || byteCount + pathspecBytes > diffPathspecByteLimit {
                 batches.append(batch)
                 batch = []
                 byteCount = 0

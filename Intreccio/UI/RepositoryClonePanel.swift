@@ -142,7 +142,7 @@ private final class RepositoryCloneInputPanelController: NSViewController, NSTex
         textView.font = .systemFont(ofSize: 16)
         textView.typingAttributes = [
             .foregroundColor: NSColor.white,
-            .font: NSFont.systemFont(ofSize: 16),
+            .font: NSFont.systemFont(ofSize: 16)
         ]
         textView.textContainerInset = NSSize(width: 10, height: 10)
         textView.delegate = self
@@ -199,7 +199,7 @@ private final class RepositoryCloneInputPanelController: NSViewController, NSTex
             errorLabel.topAnchor.constraint(equalTo: inputContainer.bottomAnchor, constant: 6),
             buttons.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
             buttons.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 12),
-            buttons.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
+            buttons.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20)
         ])
         self.placeholderLabel = placeholderLabel
         placeholderLabel.isHidden = true
@@ -313,7 +313,6 @@ private final class RepositoryCloneInputPanelController: NSViewController, NSTex
         }
     }
 
-
     @objc private func `continue`(_ sender: NSButton) {
         guard let cloneURLs = RepositoryClonePanel.cloneURLs(from: textView.string) else {
             errorLabel?.isHidden = false
@@ -370,7 +369,6 @@ private final class RepositoryCloneInputPanelController: NSViewController, NSTex
         panel.parent?.removeChildWindow(panel)
         panel.orderOut(nil)
     }
-
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         dismiss()

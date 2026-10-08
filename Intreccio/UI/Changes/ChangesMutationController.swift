@@ -25,7 +25,6 @@ final class ChangesMutationController: NSObject {
         }
     }
 
-
     final class MutationContext {
         let selectedChanges: [FileChange]
         let status: RepoStatus
@@ -217,7 +216,6 @@ final class ChangesMutationController: NSObject {
         }
         controlsController.showContextFailure(action: action, reason: reason)
     }
-
 
     @objc func stageSelected(_ sender: Any?) {
         guard let context = requireCurrentContext(for: "Stage Selected"),

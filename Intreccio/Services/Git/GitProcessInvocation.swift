@@ -382,7 +382,7 @@ nonisolated final class ProcessInvocation: @unchecked Sendable {
         try? standardErrorReader.pipe.fileHandleForWriting.close()
         DispatchQueue.global(qos: .utility).async { [weak self] in
             var status: Int32 = 0
-            while waitpid(launchedProcessID, &status, 0) == -1 && errno == EINTR {}
+            while waitpid(launchedProcessID, &status, 0) == -1, errno == EINTR {}
             self?.send(.processExited(Self.exitCode(from: status)))
         }
         return launchedProcessID

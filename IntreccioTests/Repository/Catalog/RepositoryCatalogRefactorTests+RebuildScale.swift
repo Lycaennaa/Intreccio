@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RepositoryCatalogRefactorTests {
     func testRebuildHandlesLargeCandidateAndSnapshotSets() {
@@ -57,7 +57,7 @@ extension RepositoryCatalogRefactorTests {
         XCTAssertEqual(result.repositories.map(\.id), expectedIndices.map { snapshotIDs[$0] })
         XCTAssertEqual(result.snapshots.map(\.id), expectedIndices.map { snapshotIDs[$0] })
         XCTAssertEqual(
-            result.repositories.map { $0.canonicalURL.path },
+            result.repositories.map(\.canonicalURL.path),
             expectedIndices.map { "/large/repository-\($0)" }
         )
     }

@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class GitRunnerTests: XCTestCase {
     func testCapturesOutputAndExactNonzeroFailure() async throws {
@@ -127,7 +127,7 @@ final class GitRunnerTests: XCTestCase {
         let runner = GitRunner(limiter: GitProcessLimiter(maximumConcurrent: 1))
         let command = Task {
             try await runner.run(arguments: [
-                "-c", "alias.stream=!while true; do printf x; sleep 0.01; done", "stream",
+                "-c", "alias.stream=!while true; do printf x; sleep 0.01; done", "stream"
             ])
         }
         try await Task.sleep(for: .milliseconds(50))
@@ -191,7 +191,7 @@ final class GitRunnerTests: XCTestCase {
         let input = Data("payload".utf8)
         let result = try await runner.run(
             arguments: [
-                "-c", "alias.consume=!cat; printf diagnostic >&2", "consume",
+                "-c", "alias.consume=!cat; printf diagnostic >&2", "consume"
             ],
             input: input
         )

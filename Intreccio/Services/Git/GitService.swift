@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 
 nonisolated enum GitServiceError: Error, Equatable, CustomStringConvertible {
     case invalidObjectID(String)
@@ -179,6 +179,5 @@ actor GitService {
         }
         return remoteURLs.compactMap { GitHubRepositoryURL.webURL(from: $0.value) }.first
     }
-
 
 }

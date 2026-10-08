@@ -1,9 +1,9 @@
 import AppKit
+import CoreServices
 import CryptoKit
 import Foundation
-import CoreServices
-import Security
 import Network
+import Security
 
 nonisolated struct T3CodeWorkspaceActivation: Equatable, Sendable {
     let projectID: String

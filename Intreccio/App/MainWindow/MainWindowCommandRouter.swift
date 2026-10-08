@@ -53,7 +53,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
             ToolbarID.refreshActions,
             ToolbarID.viewMode,
             ToolbarID.downloads,
-            ToolbarID.settings,
+            ToolbarID.settings
         ]
     }
 
@@ -73,7 +73,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
                     ("Add Root Folder…", #selector(addFolder(_:))),
                     ("Add Repository…", #selector(addRepository(_:))),
                     ("Create Local Repository…", #selector(createLocalRepository(_:))),
-                    ("Clone Repository…", #selector(cloneRepository(_:))),
+                    ("Clone Repository…", #selector(cloneRepository(_:)))
                 ]
             )
         case ToolbarID.downloads:
@@ -86,7 +86,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
                 toolTip: "Refresh repository or rescan all sources",
                 actions: [
                     ("Refresh Repository", #selector(refresh(_:))),
-                    ("Rescan All Sources", #selector(rescan(_:))),
+                    ("Rescan All Sources", #selector(rescan(_:)))
                 ]
             )
         case ToolbarID.settings:
@@ -99,7 +99,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
                 toolTip: "Switch between Changes and History",
                 actions: [
                     ("Changes", #selector(showChanges(_:))),
-                    ("History", #selector(showHistory(_:))),
+                    ("History", #selector(showHistory(_:)))
                 ]
             )
         default:
@@ -216,7 +216,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
     func cancelDirectoryOperationForTermination() -> Task<Void, Never>? {
         isTerminating = true
         directoryOperationTask?.cancel()
-        let tasks = [directoryOperationTask, downloadManager.cancelForTermination()].compactMap { $0 }
+        let tasks = [directoryOperationTask, downloadManager.cancelForTermination()].compactMap(\.self)
         switch tasks.count {
         case 0:
             return nil

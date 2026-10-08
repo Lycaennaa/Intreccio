@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppCoordinatorTests {
     func testDefaultCommitMessageListsUpToThreeStagedFiles() {
@@ -26,7 +26,7 @@ extension AppCoordinatorTests {
         )
         XCTAssertEqual(
             AppCoordinator.defaultCommitMessage(for: RepoStatus(changes: [
-                change("a\u{000B}b\u{000C}c\u{0085}d\u{2028}e\u{2029}f.txt", .modified),
+                change("a\u{000B}b\u{000C}c\u{0085}d\u{2028}e\u{2029}f.txt", .modified)
             ])),
             "Update a\\u{B}b\\u{C}c\\u{85}d\\u{2028}e\\u{2029}f.txt"
         )
@@ -39,14 +39,14 @@ extension AppCoordinatorTests {
                     worktreeState: .unmodified,
                     kind: .ordinary,
                     submoduleState: nil
-                ),
+                )
             ])),
             "Update bad\\xFF.txt"
         )
         XCTAssertEqual(
             AppCoordinator.defaultCommitMessage(for: RepoStatus(changes: [
                 change("old.txt", .deleted),
-                change("older.txt", .deleted),
+                change("older.txt", .deleted)
             ])),
             "Delete old.txt and older.txt"
         )
@@ -54,7 +54,7 @@ extension AppCoordinatorTests {
             AppCoordinator.defaultCommitMessage(for: RepoStatus(changes: [
                 change("one.txt", .modified),
                 change("two.txt", .modified),
-                change("three.txt", .modified),
+                change("three.txt", .modified)
             ])),
             "Update one.txt, two.txt and three.txt"
         )
@@ -63,7 +63,7 @@ extension AppCoordinatorTests {
                 change("two.txt", .modified),
                 change("one.txt", .modified),
                 change("two.txt", .modified),
-                change("three.txt", .modified),
+                change("three.txt", .modified)
             ])),
             "Update two.txt, one.txt and three.txt"
         )
@@ -71,7 +71,7 @@ extension AppCoordinatorTests {
             change("one.txt", .modified),
             change("two.txt", .modified),
             change("three.txt", .modified),
-            change("four.txt", .modified),
+            change("four.txt", .modified)
         ])))
     }
 
@@ -428,7 +428,6 @@ extension AppCoordinatorTests {
                 && coordinator.selectedHistoryState.phase == .idle
         }
         let historyGenerationBeforeRefresh = coordinator.repositoryRefreshStates[repositoryID]?.historyGeneration ?? 0
-
 
         try runGit(at: directory, arguments: ["clone", remote.path, peer.path])
         try runGit(at: peer, arguments: ["config", "user.name", "Peer User"])

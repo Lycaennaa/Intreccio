@@ -13,11 +13,6 @@ nonisolated struct DiffSnapshotID: Sendable, Equatable, Hashable {
 nonisolated struct DiffFileID: Sendable, Equatable, Hashable {
     let snapshotID: DiffSnapshotID
     let ordinal: Int
-
-    init(snapshotID: DiffSnapshotID, ordinal: Int) {
-        self.snapshotID = snapshotID
-        self.ordinal = ordinal
-    }
 }
 
 nonisolated enum DiffPresentationScope: Sendable, Equatable {
@@ -105,7 +100,6 @@ nonisolated struct DiffPresentationFile: Sendable, Equatable {
     }
 }
 
-
 nonisolated struct DiffPresentationModel: Sendable, Equatable {
     let snapshotID: DiffSnapshotID
     let files: [DiffPresentationFile]
@@ -171,7 +165,7 @@ nonisolated struct DiffPresentationModel: Sendable, Equatable {
             state = unavailableCount == 0 && oversizedCount == 0
                 ? .complete
                 : .partial(unavailableFileCount: unavailableCount, oversizedFileCount: oversizedCount)
-            stats = Self.aggregateLineStats(presentationFiles.map { $0.header.stats })
+            stats = Self.aggregateLineStats(presentationFiles.map(\.header.stats))
         }
     }
 

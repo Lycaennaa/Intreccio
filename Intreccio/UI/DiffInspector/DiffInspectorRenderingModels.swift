@@ -198,7 +198,6 @@ nonisolated struct DiffFilePickerEntry: Sendable, Equatable {
         return "\(statusText)  \(pathTitle)"
     }
 
-
     init(
         pathTitle: String,
         path: GitPath? = nil,
@@ -220,7 +219,7 @@ nonisolated struct DiffFilePickerEntry: Sendable, Equatable {
             ? "\(statusText)  \(pathTitle)"
             : pathTitle
         self.accessibilityText = accessibilityText ?? [displayTitle, countText, stateText]
-            .compactMap { $0 }
+            .compactMap(\.self)
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
     }

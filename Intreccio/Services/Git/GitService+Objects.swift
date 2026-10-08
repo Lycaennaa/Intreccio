@@ -12,7 +12,7 @@ extension GitService {
         )
         let objectID = String(decoding: result.standardOutput, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (objectID.count == 40 || objectID.count == 64), objectID.allSatisfy(\.isHexDigit) else {
+        guard objectID.count == 40 || objectID.count == 64, objectID.allSatisfy(\.isHexDigit) else {
             throw GitServiceError.invalidObjectID(objectID)
         }
         return objectID

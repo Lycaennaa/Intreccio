@@ -132,7 +132,7 @@ nonisolated struct PersistedUIState: Codable, Sendable, Equatable {
             assignments.reserveCapacity(min(count, maxQuickOpenFileAssignments))
         }
         var decodedEntryCount = 0
-        while !values.isAtEnd && decodedEntryCount < maximumDecodedEntries {
+        while !values.isAtEnd, decodedEntryCount < maximumDecodedEntries {
             decodedEntryCount += 1
             assignments.append(try decodeQuickOpenFileAssignment(from: &values))
         }
@@ -149,7 +149,7 @@ nonisolated struct PersistedUIState: Codable, Sendable, Equatable {
         paths.reserveCapacity(maxQuickOpenFilesPerRepository)
         let maximumDecodedPaths = maxQuickOpenFilesPerRepository * 4
         var decodedPathCount = 0
-        while !pathValues.isAtEnd && decodedPathCount < maximumDecodedPaths {
+        while !pathValues.isAtEnd, decodedPathCount < maximumDecodedPaths {
             decodedPathCount += 1
             paths.append(try pathValues.decode(String.self))
         }
@@ -162,8 +162,6 @@ nonisolated struct PersistedUIState: Codable, Sendable, Equatable {
               RepositoryPathPolicy.relativePathComponents(path) != nil else { return false }
         return true
     }
-
-
 
     var selectedRepoID: UUID?
     var mode: AppMode = .changes

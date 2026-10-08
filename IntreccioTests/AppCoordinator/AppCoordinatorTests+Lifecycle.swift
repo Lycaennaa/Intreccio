@@ -1,10 +1,10 @@
 import AppKit
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppCoordinatorTests {
-    func testTaskCompletionDrainWaitsForCancellationCleanup() async throws {
+    func testTaskCompletionDrainWaitsForCancellationCleanup() async {
         let probe = TaskCleanupProbe()
         let task = Task {
             await probe.markStarted()
@@ -81,7 +81,7 @@ extension AppCoordinatorTests {
         expectedAfterSeed.uiState.savedOpenApplicationURLs = PersistedOpenApplicationList.normalizedSavedApplicationURLs([
             URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"),
             URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"),
-            URL(fileURLWithPath: "/Applications/Utilities/Terminal.app"),
+            URL(fileURLWithPath: "/Applications/Utilities/Terminal.app")
         ])
         expectedAfterSeed.uiState.seededDefaultFolderApplications = true
         XCTAssertEqual(loadedState.state, expectedAfterSeed)
@@ -110,7 +110,6 @@ extension AppCoordinatorTests {
             expectedState.uiState.excludedOpenApplicationURLs
         )
     }
-
 
     func testSeedDefaultFolderApplicationsRunsOnceEver() async throws {
         let directory = try makeTestDirectory()

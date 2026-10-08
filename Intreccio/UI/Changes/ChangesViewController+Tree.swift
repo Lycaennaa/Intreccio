@@ -11,18 +11,14 @@ extension ChangesViewController {
             ("Dual State", []),
             ("Staged", []),
             ("Unstaged", []),
-            ("Untracked", []),
+            ("Untracked", [])
         ]
         let rows = Dictionary(grouping: changes.filter { $0.kind != .ignored }, by: \.gitPath).values
         for row in rows {
             let index: Int
             let staged = row.contains(where: \.hasStagedChange)
             let unstaged = row.contains(where: \.hasUnstagedChange)
-            if row.contains(where: { $0.kind == .unmerged }) { index = 0 }
-            else if staged && unstaged { index = 1 }
-            else if staged { index = 2 }
-            else if row.allSatisfy({ $0.kind == .untracked }) { index = 4 }
-            else { index = 3 }
+            if row.contains(where: { $0.kind == .unmerged }) { index = 0 } else if staged, unstaged { index = 1 } else if staged { index = 2 } else if row.allSatisfy({ $0.kind == .untracked }) { index = 4 } else { index = 3 }
             groups[index].1.append(Array(row))
         }
         return groups.compactMap { title, rows in
@@ -92,7 +88,7 @@ extension ChangesViewController {
             label.trailingAnchor.constraint(equalTo: badge.leadingAnchor, constant: -8),
             label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             badge.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6),
-            badge.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            badge.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
         ])
         cell.toolTip = title
         cell.setAccessibilityLabel(badgeText.map { "\(title), status \($0)" } ?? title)

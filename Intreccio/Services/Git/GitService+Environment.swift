@@ -19,7 +19,7 @@ extension GitService {
     var mutationEnvironment: [String: String] {
         [
             "LC_ALL": "C",
-            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_TERMINAL_PROMPT": "0"
         ]
     }
 

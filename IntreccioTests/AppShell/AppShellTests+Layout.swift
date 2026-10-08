@@ -1,6 +1,6 @@
 import AppKit
-import XCTest
 @testable import Intreccio
+import XCTest
 
 private func allMenuItems(in menu: NSMenu) -> [NSMenuItem] {
     menu.items.flatMap { item in
@@ -101,7 +101,7 @@ extension AppShellTests {
             ("Add Root Folder…", #selector(MainWindowCommandRouter.addFolder(_:))),
             ("Add Repository…", #selector(MainWindowCommandRouter.addRepository(_:))),
             ("Create Local Repository…", #selector(MainWindowCommandRouter.createLocalRepository(_:))),
-            ("Clone Repository…", #selector(MainWindowCommandRouter.cloneRepository(_:))),
+            ("Clone Repository…", #selector(MainWindowCommandRouter.cloneRepository(_:)))
         ]
         XCTAssertEqual(addSourcesMenuItems.count, sourceMenuContracts.count)
         for contract in sourceMenuContracts {
@@ -119,7 +119,7 @@ extension AppShellTests {
         let refreshMenuItems = try XCTUnwrap(refreshToolbarItem.menu).items
         let refreshMenuContracts: [(title: String, action: Selector)] = [
             ("Refresh Repository", #selector(MainWindowCommandRouter.refresh(_:))),
-            ("Rescan All Sources", #selector(MainWindowCommandRouter.rescan(_:))),
+            ("Rescan All Sources", #selector(MainWindowCommandRouter.rescan(_:)))
         ]
         XCTAssertEqual(refreshMenuItems.map(\.title), refreshMenuContracts.map(\.title))
         for (item, contract) in zip(refreshMenuItems, refreshMenuContracts) {
@@ -133,7 +133,7 @@ extension AppShellTests {
         let viewMenuItems = try XCTUnwrap(viewToolbarItem.menu).items
         let viewMenuContracts: [(title: String, action: Selector)] = [
             ("Changes", #selector(MainWindowCommandRouter.showChanges(_:))),
-            ("History", #selector(MainWindowCommandRouter.showHistory(_:))),
+            ("History", #selector(MainWindowCommandRouter.showHistory(_:)))
         ]
         XCTAssertEqual(viewMenuItems.map(\.title), viewMenuContracts.map(\.title))
         for (item, contract) in zip(viewMenuItems, viewMenuContracts) {
@@ -153,7 +153,7 @@ extension AppShellTests {
             ("Focus Search", #selector(MainWindowCommandRouter.focusSearch(_:))),
             ("Create Local Repository…", #selector(MainWindowCommandRouter.createLocalRepository(_:))),
             ("Clone Repository…", #selector(MainWindowCommandRouter.cloneRepository(_:))),
-            ("Downloads", #selector(MainWindowCommandRouter.showDownloads(_:))),
+            ("Downloads", #selector(MainWindowCommandRouter.showDownloads(_:)))
         ]
         for contract in menuContracts {
             let item = try XCTUnwrap(

@@ -1,6 +1,6 @@
 import AppKit
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension AppShellTests {
     func makeDiffFile(path: String, line: String) -> DiffFile {
@@ -21,9 +21,9 @@ extension AppShellTests {
                             newLineNumber: 1,
                             hasTrailingNewline: true,
                             tokens: DiffSyntaxTokenizer.tokenize(line)
-                        ),
+                        )
                     ]
-                ),
+                )
             ])
         )
     }
@@ -52,16 +52,15 @@ extension AppShellTests {
                             newRange: DiffRange(start: 1, count: lines.count),
                             heading: nil,
                             lines: lines
-                        ),
+                        )
                     ])
-                ),
+                )
             ],
             fallback: nil,
             sourceByteCount: lines.reduce(0) { $0 + $1.text.utf8.count + 1 },
             sourceLineCount: lines.count
         )
     }
-
 
     @MainActor
     func findTextView(in view: NSView) -> NSTextView? {

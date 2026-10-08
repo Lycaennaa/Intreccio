@@ -441,9 +441,7 @@ nonisolated enum DiffSyntaxTokenizer {
             let character = text[index]
             if inString {
                 buffer.append(character)
-                if escaped { escaped = false }
-                else if character == "\\" { escaped = true }
-                else if character == "\"" { flush(.string); inString = false }
+                if escaped { escaped = false } else if character == "\\" { escaped = true } else if character == "\"" { flush(.string); inString = false }
             } else if character == "/",
                       text.index(after: index) < text.endIndex,
                       text[text.index(after: index)] == "/" {

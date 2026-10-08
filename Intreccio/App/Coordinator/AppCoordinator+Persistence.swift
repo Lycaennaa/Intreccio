@@ -74,8 +74,8 @@ extension AppCoordinator {
             startupTask,
             mutationTask,
             uiSaveTask,
-            rememberedApplicationSaveTask,
-        ].compactMap { $0 }
+            rememberedApplicationSaveTask
+        ].compactMap(\.self)
         mutationGeneration &+= 1
         tasks.forEach { $0.cancel() }
         startupTask = nil

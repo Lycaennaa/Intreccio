@@ -28,11 +28,6 @@ nonisolated struct StateLoadResult: Sendable {
 nonisolated struct StateStoreValidatedCatalog: Sendable {
     fileprivate let catalog: PersistedCatalogState
     fileprivate let data: Data
-
-    fileprivate init(catalog: PersistedCatalogState, data: Data) {
-        self.catalog = catalog
-        self.data = data
-    }
 }
 
 actor StateStore {
@@ -74,7 +69,7 @@ actor StateStore {
         let ui = loadUI(fallback: catalog.state.uiState)
         var state = catalog.state
         state.uiState = ui.state
-        let recoveryMessages = [catalog.recoveryMessage, ui.recoveryMessage].compactMap { $0 }
+        let recoveryMessages = [catalog.recoveryMessage, ui.recoveryMessage].compactMap(\.self)
         return StateLoadResult(
             state: state,
             recoveryMessage: recoveryMessages.isEmpty ? nil : recoveryMessages.joined(separator: "\n")
@@ -185,7 +180,7 @@ actor StateStore {
             case .legacy(let state):
                 try PersistedCatalogBudget.validate(state)
                 return CatalogLoadResult(state: state, recoveryMessage: nil)
-            case .ui(_):
+            case .ui:
                 throw PersistedDocumentEnvelopeError.unexpectedDocumentType
             }
         } catch let error as PersistedCatalogBudgetError {
@@ -252,7 +247,7 @@ actor StateStore {
                 )
             case .ui(let document):
                 return UILoadResult(state: document.uiState, recoveryMessage: nil)
-            case .catalog(_), .legacy(_):
+            case .catalog, .legacy:
                 throw PersistedDocumentEnvelopeError.unexpectedDocumentType
             }
         } catch {

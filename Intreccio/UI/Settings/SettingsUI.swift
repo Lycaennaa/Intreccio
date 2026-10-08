@@ -19,7 +19,7 @@ enum SettingsUI {
             stack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
             stack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
-            stack.bottomAnchor.constraint(greaterThanOrEqualTo: scroll.contentView.bottomAnchor),
+            stack.bottomAnchor.constraint(greaterThanOrEqualTo: scroll.contentView.bottomAnchor)
         ])
         return scroll
     }
@@ -72,4 +72,3 @@ enum SettingsUI {
         return button
     }
 }
-

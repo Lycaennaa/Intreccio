@@ -6,8 +6,7 @@ private nonisolated final class RepoScanWarningCollector: @unchecked Sendable {
 
     func append(_ warning: String) {
         lock.withLock {
-            if values.count < 100 { values.append(warning) }
-            else if values.count == 100 { values.append("Additional scan warnings omitted.") }
+            if values.count < 100 { values.append(warning) } else if values.count == 100 { values.append("Additional scan warnings omitted.") }
         }
     }
 
@@ -15,7 +14,6 @@ private nonisolated final class RepoScanWarningCollector: @unchecked Sendable {
         lock.withLock { values }
     }
 }
-
 
 nonisolated struct ScannedRepository: Sendable, Equatable {
     let url: URL
@@ -181,7 +179,6 @@ actor RepoScanner {
         }
         return values.isDirectory == true && values.isSymbolicLink != true
     }
-
 
     private func acquireScanSlot() async throws {
         try Task.checkCancellation()

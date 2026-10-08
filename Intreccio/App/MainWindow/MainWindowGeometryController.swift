@@ -76,7 +76,7 @@ final class MainWindowGeometryController: NSObject {
     }
 
     @objc private func splitViewDidResize(_ notification: Notification) {
-        if !hasRestoredState && !isRestoringState { recordPreRestoreAdjustment() }
+        if !hasRestoredState, !isRestoringState { recordPreRestoreAdjustment() }
         persistCurrentState()
     }
 
@@ -101,11 +101,11 @@ final class MainWindowGeometryController: NSObject {
         let currentWidths = contentController.paneWidths
         let sidebarChanged = abs(currentWidths.sidebar - initialPaneWidths.sidebar) > 1
         let listChanged = abs(currentWidths.list - initialPaneWidths.list) > 1
-        if sidebarChanged && !listChanged {
+        if sidebarChanged, !listChanged {
             preRestoreAdjustments.sidebar = true
-        } else if listChanged && !sidebarChanged {
+        } else if listChanged, !sidebarChanged {
             preRestoreAdjustments.list = true
-        } else if sidebarChanged && listChanged {
+        } else if sidebarChanged, listChanged {
             if abs(currentPositions.sidebar - previous.sidebar) > 1 {
                 preRestoreAdjustments.sidebar = true
             } else if abs(currentPositions.list - previous.list) > 1 {

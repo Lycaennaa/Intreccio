@@ -1,7 +1,7 @@
 import AppKit
 import CoreText
-import XCTest
 @testable import Intreccio
+import XCTest
 
 final class DiffInspectorRenderingTests: XCTestCase {
     func testTextLayoutBuilderPreservesTokenStylesAndVisibleWhitespace() throws {
@@ -27,11 +27,11 @@ final class DiffInspectorRenderingTests: XCTestCase {
                                 DiffToken(text: "value", kind: .plain),
                                 DiffToken(text: " = ", kind: .plain),
                                 DiffToken(text: "\"yes\"", kind: .string),
-                                DiffToken(text: " // note", kind: .comment),
+                                DiffToken(text: " // note", kind: .comment)
                             ]
-                        ),
+                        )
                     ]
-                ),
+                )
             ])
         )
 
@@ -52,7 +52,7 @@ final class DiffInspectorRenderingTests: XCTestCase {
             text: "let value let",
             runs: [
                 DiffRenderRun(range: NSRange(location: 0, length: 3), style: .keyword),
-                DiffRenderRun(range: NSRange(location: 10, length: 3), style: .keyword),
+                DiffRenderRun(range: NSRange(location: 10, length: 3), style: .keyword)
             ]
         )
         let rendered = try XCTUnwrap(DiffAttributedStringBuilder.make(layout))
@@ -237,7 +237,7 @@ final class DiffInspectorRenderingTests: XCTestCase {
                 .oversized(count: 1, reason: .lineLimit(maximumLines: 10)),
                 .limited(.byteLimit(100)),
                 .metadataTruncated(omittedBytes: 1_000, omittedLines: 20),
-                .renderLimited,
+                .renderLimited
             ]
         )
         let bar = DiffSummaryBar(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
@@ -344,7 +344,7 @@ final class DiffInspectorRenderingTests: XCTestCase {
 
         XCTAssertEqual(matches, [
             NSRange(location: 0, length: 7),
-            NSRange(location: 50, length: 7),
+            NSRange(location: 50, length: 7)
         ])
     }
 
@@ -417,7 +417,7 @@ final class DiffInspectorRenderingTests: XCTestCase {
                 DiffLine(kind: .context, text: "two", oldLineNumber: 2, newLineNumber: 2, hasTrailingNewline: true, tokens: []),
                 DiffLine(kind: .context, text: "three", oldLineNumber: 3, newLineNumber: 3, hasTrailingNewline: true, tokens: []),
                 DiffLine(kind: .context, text: "four", oldLineNumber: 4, newLineNumber: 4, hasTrailingNewline: true, tokens: []),
-                DiffLine(kind: .addition, text: "five", oldLineNumber: nil, newLineNumber: 5, hasTrailingNewline: true, tokens: []),
+                DiffLine(kind: .addition, text: "five", oldLineNumber: nil, newLineNumber: 5, hasTrailingNewline: true, tokens: [])
             ]
         )
         let model = DiffPresentationModel(
@@ -434,7 +434,6 @@ final class DiffInspectorRenderingTests: XCTestCase {
         XCTAssertTrue(hunkNode.children.contains { node in node.kind == DiffAccessibilityNodeKind.line })
         XCTAssertTrue(hunkNode.children.contains { node in node.kind == DiffAccessibilityNodeKind.foldedContext })
     }
-
 
     func testLimitedAccessibilityRetainsAggregateFallbackReason() throws {
         let visibleFile = DiffFile(path: "visible.swift", originalPath: nil, change: .modified, content: .text([]))

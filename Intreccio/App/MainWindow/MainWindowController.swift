@@ -89,7 +89,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         let directoryOperation = commandRouter.cancelDirectoryOperationForTermination()
         let saved = await coordinator.shutdown()
         await renderingTask?.value
-        await TaskCompletionDrain.waitForCompletion(sidebarTasks + [directoryOperation].compactMap { $0 })
+        await TaskCompletionDrain.waitForCompletion(sidebarTasks + [directoryOperation].compactMap(\.self))
         commandRouter.finishTerminationWait()
         if !saved {
             isTerminating = false

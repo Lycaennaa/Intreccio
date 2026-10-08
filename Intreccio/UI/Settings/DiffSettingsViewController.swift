@@ -6,7 +6,7 @@ final class DiffSettingsViewController: NSViewController, SettingsSectionControl
         ("Small (11 pt)", 11),
         ("Default (12 pt)", 12),
         ("Large (13 pt)", 13),
-        ("Larger (14 pt)", 14),
+        ("Larger (14 pt)", 14)
     ]
 
     private let coordinator: AppCoordinator
@@ -28,12 +28,12 @@ final class DiffSettingsViewController: NSViewController, SettingsSectionControl
     override func loadView() {
         fontSizePopup.target = self
         fontSizePopup.action = #selector(changeFontSize(_:))
-        fontSizePopup.addItems(withTitles: Self.fontSizes.map { $0.label })
+        fontSizePopup.addItems(withTitles: Self.fontSizes.map(\.label))
         whitespaceCheck.target = self
         whitespaceCheck.action = #selector(toggleWhitespace(_:))
         view = SettingsUI.section(title: "Diff", views: [
             SettingsUI.row(SettingsUI.label("Font size"), fontSizePopup),
-            whitespaceCheck,
+            whitespaceCheck
         ])
     }
 
@@ -65,4 +65,3 @@ final class DiffSettingsViewController: NSViewController, SettingsSectionControl
         coordinator.setDiffFontSize(Self.fontSizes[index].size)
     }
 }
-

@@ -1,6 +1,6 @@
 import AppKit
-import XCTest
 @testable import Intreccio
+import XCTest
 
 @MainActor
 private func descendantViews(of view: NSView) -> [NSView] {
@@ -54,7 +54,7 @@ final class SettingsViewSmokeTests: XCTestCase {
             controller.view.topAnchor.constraint(equalTo: container.topAnchor),
             controller.view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             controller.view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            controller.view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            controller.view.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
         container.layoutSubtreeIfNeeded()
 
@@ -78,7 +78,7 @@ final class SettingsViewSmokeTests: XCTestCase {
             "Add Root Folder…",
             "Add Repository…",
             "Create Local Repository…",
-            "Clone Repository…",
+            "Clone Repository…"
         ])
         XCTAssertTrue(sourceActions.allSatisfy { $0.target === repositorySettings })
 

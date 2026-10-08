@@ -254,7 +254,7 @@ final class DiffInspectorViewController: NSViewController, NSSearchFieldDelegate
             accessibilityProxy.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             accessibilityProxy.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             accessibilityProxy.widthAnchor.constraint(equalToConstant: 1),
-            accessibilityProxy.heightAnchor.constraint(equalToConstant: 1),
+            accessibilityProxy.heightAnchor.constraint(equalToConstant: 1)
         ])
         view = container
     }

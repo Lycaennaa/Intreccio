@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Intreccio
+import XCTest
 
 extension RefreshEngineTests {
     func testDebouncerCoalescesDuplicatesAndHonorsMaximumDelay() async throws {
@@ -14,7 +14,7 @@ extension RefreshEngineTests {
         try await Task.sleep(for: .milliseconds(45))
         await debouncer.submit([
             FileSystemEvent(path: "/repo/a", requiresFullRescan: false),
-            FileSystemEvent(path: "/repo/b", requiresFullRescan: true, requiresSourceRescan: true),
+            FileSystemEvent(path: "/repo/b", requiresFullRescan: true, requiresSourceRescan: true)
         ])
         try await Task.sleep(for: .milliseconds(45))
         await debouncer.submit([FileSystemEvent(path: "/repo/b", requiresFullRescan: false)])

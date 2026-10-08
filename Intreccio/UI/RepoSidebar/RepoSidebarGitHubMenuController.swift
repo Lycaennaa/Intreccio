@@ -43,8 +43,6 @@ final class RepoSidebarGitHubMenuController: NSObject {
         menuContext = nil
     }
 
-
-
     func addMenuItems(
         to menu: NSMenu,
         repositoryIDs: [UUID],
@@ -79,7 +77,6 @@ final class RepoSidebarGitHubMenuController: NSObject {
         item.representedObject = RepositorySelectionTarget(context: context)
         menu.addItem(item)
     }
-
 
     private func requestGitHubMenuLookup(_ context: RepoSidebarMenuContext, repositoryID: UUID) {
         guard let menu = context.menu else { return }
@@ -146,7 +143,7 @@ final class RepoSidebarGitHubMenuController: NSObject {
     }
 
     func cancelOperationsForTermination() -> [Task<Void, Never>] {
-        let tasks = [lookupTask, browserOpenTask].compactMap { $0 }
+        let tasks = [lookupTask, browserOpenTask].compactMap(\.self)
         tasks.forEach { $0.cancel() }
         lookupTask = nil
         lookupRepositoryID = nil

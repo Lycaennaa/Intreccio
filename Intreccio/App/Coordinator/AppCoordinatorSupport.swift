@@ -1,6 +1,5 @@
 import Foundation
 
-
 nonisolated enum TaskCompletionDrain {
     static func waitForCompletion(_ tasks: [Task<Void, Never>]) async {
         await withTaskGroup(of: Void.self) { group in
@@ -84,7 +83,6 @@ nonisolated final class BoundedKeyedAsyncStream<Element: Sendable, Key: Hashable
         result.0?.resume(returning: nil)
         result.1.forEach { $0.continuation.resume(returning: false) }
     }
-
 
     var pendingCount: Int {
         withLock { pendingElements.count }
@@ -248,7 +246,6 @@ nonisolated final class BoundedKeyedAsyncStream<Element: Sendable, Key: Hashable
         return capacityWaiters.removeFirst()
     }
 
-
     private func cancelCapacityWaiter(_ id: UUID) {
         let waiter: CapacityWaiter? = withLock {
             guard let index = capacityWaiters.firstIndex(where: { $0.id == id }) else {
@@ -259,10 +256,6 @@ nonisolated final class BoundedKeyedAsyncStream<Element: Sendable, Key: Hashable
         waiter?.continuation.resume(returning: false)
     }
 }
-
-
-
-
 
 nonisolated enum CoordinatorError: Error, CustomStringConvertible {
     case invalidRepository(String)

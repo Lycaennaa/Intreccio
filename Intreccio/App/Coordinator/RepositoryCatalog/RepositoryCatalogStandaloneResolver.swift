@@ -39,7 +39,7 @@ final class RepositoryCatalogStandaloneResolver {
         }
         return try await withThrowingTaskGroup(of: IndexedStandaloneResolution.self) { group in
             defer { group.cancelAll() }
-            var resolutions = Array<RepositoryStandaloneResolution?>(
+            var resolutions = [RepositoryStandaloneResolution?](
                 repeating: nil,
                 count: sources.count
             )

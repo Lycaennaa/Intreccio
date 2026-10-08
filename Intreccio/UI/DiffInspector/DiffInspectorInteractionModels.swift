@@ -255,7 +255,7 @@ nonisolated enum DiffAccessibilityBuilder {
                         kind: .state,
                         label: "File too large to display",
                         value: [diffOversizedReasonLabel(reason), byteCount.map { String($0) + " bytes" }]
-                            .compactMap { $0 }
+                            .compactMap(\.self)
                             .joined(separator: ", ")
                     ))
                 case .unavailable(let reason):

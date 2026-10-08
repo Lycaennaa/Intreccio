@@ -102,7 +102,6 @@ extension AppCoordinator {
         publish()
     }
 
-
     func setWindowState(frame: String, sidebarWidth: Double, changesListWidth: Double) {
         guard !isShuttingDown else { return }
         // Never persist transient degenerate geometry (e.g. recorded mid-teardown);
@@ -190,7 +189,6 @@ extension AppCoordinator {
         publish()
         return .updated
     }
-
 
     /// One-time registration of the system folder apps on first launch ever.
     /// Afterwards they are ordinary remembered applications: removing them

@@ -168,7 +168,7 @@ nonisolated struct RepositoryFileEventPathClassifier: Sendable {
 nonisolated struct RepositoryFileEventPathPrefixIndex: Sendable {
     private struct Node: Sendable {
         var children: [String: Int] = [:]
-        var value: Int? = nil
+        var value: Int?
     }
 
     private var nodes: [Node]

@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 
 nonisolated struct GitUpstreamRefreshResult: Sendable {
     let status: RepoStatus
@@ -137,8 +137,8 @@ extension GitService {
             throw GitServiceError.upstreamRefNotFound(remoteRef)
         }
         let remoteObjectID = String(decoding: advertisedFields[0], as: UTF8.self)
-        guard (remoteObjectID.count == 40 || remoteObjectID.count == 64),
-              remoteObjectID.allSatisfy({ $0.isHexDigit }) else {
+        guard remoteObjectID.count == 40 || remoteObjectID.count == 64,
+              remoteObjectID.allSatisfy(\.isHexDigit) else {
             throw GitServiceError.invalidObjectID(remoteObjectID)
         }
         if currentObjectID.isEmpty {
@@ -177,8 +177,6 @@ extension GitService {
         return GitUpstreamRefreshResult(status: status, remote: remote, remoteRef: remoteRef)
     }
 
-
-
     func localStatus(
         repository: URL,
         priority: ProcessPriority,
@@ -189,7 +187,7 @@ extension GitService {
             repository: repository,
             arguments: [
                 "status", "--porcelain=v2", "-z", "--branch", "--show-stash",
-                "--untracked-files=normal",
+                "--untracked-files=normal"
             ],
             environment: environment,
             priority: priority
@@ -208,7 +206,7 @@ extension GitService {
                 repository: repository,
                 arguments: [
                     "status", "--porcelain=v2", "-z", "--untracked-files=all",
-                    "--pathspec-from-file=-", "--pathspec-file-nul",
+                    "--pathspec-from-file=-", "--pathspec-file-nul"
                 ],
                 input: Self.untrackedDirectoryPathspecInput(for: untrackedDirectories),
                 environment: environment,
@@ -273,7 +271,7 @@ extension GitService {
         priority: ProcessPriority
     ) async throws -> Data {
         let baseArguments = [
-            "status", "--porcelain=v2", "-z", "--untracked-files=all", "--",
+            "status", "--porcelain=v2", "-z", "--untracked-files=all", "--"
         ]
         let argumentByteLimit = Self.untrackedDirectoryPathspecArgumentByteLimit(
             repository: repository,
@@ -397,14 +395,13 @@ extension GitService {
         return status
     }
 
-
     func rebaseIsInProgress(repository: URL, priority: ProcessPriority) async throws -> Bool {
         let result = try await runner.run(
             repository: repository,
             arguments: [
                 "rev-parse", "--path-format=absolute",
                 "--git-path", "rebase-merge",
-                "--git-path", "rebase-apply",
+                "--git-path", "rebase-apply"
             ],
             environment: readEnvironment,
             outputLimit: 16 * 1_024,
