@@ -280,11 +280,13 @@ final class ChangesWorktreeSelectorController: NSObject, NSMenuDelegate {
   @objc private func worktreeSelected(_ sender: NSPopUpButton) {
     guard !isLoading,
           !isSwitching,
-          !needsMenuUpdate,
-          pendingWorktreeMenuData == nil,
           let currentRepository,
           let worktreeURL = sender.selectedItem?.representedObject as? URL,
           worktreeURL.standardizedFileURL != currentRepository.canonicalURL.standardizedFileURL else { return }
+    let availableWorktrees = pendingWorktreeMenuData?.worktrees ?? worktrees
+    guard availableWorktrees.contains(where: {
+      $0.path.standardizedFileURL == worktreeURL.standardizedFileURL
+    }) else { return }
     isSwitching = true
     pendingWorktreeURL = worktreeURL
     button.isEnabled = false
@@ -303,6 +305,11 @@ final class ChangesWorktreeSelectorController: NSObject, NSMenuDelegate {
       selectionTask = nil
       refreshMenu()
     }
+  }
+
+  func waitForSelection() async {
+    let currentSelectionTask = selectionTask
+    await currentSelectionTask?.value
   }
 
 }

@@ -519,11 +519,19 @@ extension AppCoordinatorTests {
     try await waitUntil(description: "main worktree selector reloaded") {
       selector.button.itemArray.count == 2 && selector.button.isEnabled
     }
+    let menu = try XCTUnwrap(selector.button.menu)
+    menu.delegate?.menuWillOpen?(menu)
+    await selector.waitForRefresh()
+    menu.delegate?.menuDidClose?(menu)
     try activateWorktree(named: "Feature Worktree", using: selector)
-    try await waitUntil(description: "Changes switched back to linked worktree") {
-      coordinator.repositories.first { $0.id == coordinator.state.uiState.selectedRepoID }?
-        .canonicalURL.standardizedFileURL == worktreeURL.standardizedFileURL
-    }
+    await selector.waitForSelection()
+    let selectedRepository = try XCTUnwrap(
+      coordinator.repositories.first { $0.id == coordinator.state.uiState.selectedRepoID }
+    )
+    XCTAssertEqual(
+      selectedRepository.canonicalURL.standardizedFileURL,
+      worktreeURL.standardizedFileURL
+    )
   }
 
   private func activateWorktree(
