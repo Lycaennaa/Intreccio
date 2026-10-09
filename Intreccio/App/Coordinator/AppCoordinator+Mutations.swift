@@ -82,6 +82,14 @@ extension AppCoordinator {
         beginMutation(.abortRebase)
     }
 
+    func bringWorktreeChangesToMain(sourceRepositoryID: UUID, mainRepositoryURL: URL) {
+        guard state.uiState.selectedRepoID == sourceRepositoryID,
+              let repository = repositories.first(where: { $0.id == sourceRepositoryID }),
+              repository.availability == .available,
+              repository.isLinkedWorktree else { return }
+        beginMutation(.bringWorktreeChangesToMain(mainRepositoryURL: mainRepositoryURL))
+    }
+
     var selectedStatus: RepoStatus? {
         guard let repositoryID = state.uiState.selectedRepoID else { return nil }
         return repositoryRefreshStates[repositoryID]?.status
@@ -99,6 +107,7 @@ extension AppCoordinator {
         case pushToUpstream(GitPushTarget)
         case rebaseOnUpstream
         case continueRebase
+        case bringWorktreeChangesToMain(mainRepositoryURL: URL)
         case abortRebase
 
         var refreshesUpstream: Bool {
@@ -109,6 +118,13 @@ extension AppCoordinator {
         var isCommit: Bool {
             switch self {
             case .commit, .amend: true
+            default: false
+            }
+        }
+
+        var reportsFailureWhenStale: Bool {
+            switch self {
+            case .bringWorktreeChangesToMain: true
             default: false
             }
         }
@@ -127,12 +143,14 @@ extension AppCoordinator {
             case .rebaseOnUpstream: "Could not rebase on upstream"
             case .continueRebase: "Could not continue rebase"
             case .abortRebase: "Could not abort rebase"
+            case .bringWorktreeChangesToMain: "Could not bring worktree changes to main"
             }
         }
     }
 
     func beginMutation(_ mutation: Mutation) {
         guard !isShuttingDown,
+              !mutationAdmissionClosed,
               mutationTask == nil,
               state.uiState.mode == .changes,
               let repositoryID = state.uiState.selectedRepoID,
@@ -140,14 +158,19 @@ extension AppCoordinator {
               repository.availability == .available,
               repositoryRefreshStates[repositoryID]?.status != nil else { return }
         let repositoryURL = repository.canonicalURL
+        guard let additionalRepositoryIDs = additionalRepositoryIDsToRefresh(
+            for: mutation,
+            repository: repository
+        ) else { return }
         if case let .pushToUpstream(target) = mutation, target.repository != repositoryURL { return }
         mutationGeneration &+= 1
         let generation = mutationGeneration
         let operationID = UUID()
         mutationID = operationID
+        lastMutationFailure = nil
         mutationState = .running
         publish()
-        mutationTask = Task { [weak self, gitService] in
+        mutationTask = Task<OperationFailure?, Never> { [weak self, gitService] in
             var failure: OperationFailure?
             do {
                 switch mutation {
@@ -184,20 +207,44 @@ extension AppCoordinator {
                     try await gitService.continueRebase(repository: repositoryURL)
                 case .abortRebase:
                     try await gitService.abortRebase(repository: repositoryURL)
+                case .bringWorktreeChangesToMain(let mainRepositoryURL):
+                    try await gitService.bringWorktreeChangesToMain(
+                        from: repositoryURL,
+                        to: mainRepositoryURL
+                    )
                 }
             } catch {
                 failure = .git(error, title: mutation.failureTitle)
             }
-            guard let self else { return }
+            guard let self else { return failure }
             finishMutation(
                 repositoryID: repositoryID,
                 generation: generation,
                 operationID: operationID,
                 wasCommit: mutation.isCommit,
                 refreshUpstream: mutation.refreshesUpstream,
-                failure: failure
+                additionalRepositoryIDs: additionalRepositoryIDs,
+                failure: failure,
+                reportFailureWhenStale: mutation.reportsFailureWhenStale
             )
+            return failure
         }
+    }
+
+    private func additionalRepositoryIDsToRefresh(
+        for mutation: Mutation,
+        repository: RepoDescriptor
+    ) -> [UUID]? {
+        guard case let .bringWorktreeChangesToMain(mainRepositoryURL) = mutation else { return [] }
+        guard repository.isLinkedWorktree else { return nil }
+        if let expectedMainURL = repository.mainRepositoryURL,
+           expectedMainURL.standardizedFileURL != mainRepositoryURL.standardizedFileURL {
+            return nil
+        }
+        guard let mainRepositoryID = repositories.first(where: {
+            $0.canonicalURL.standardizedFileURL == mainRepositoryURL.standardizedFileURL
+        })?.id else { return [] }
+        return mainRepositoryID == repository.id ? [] : [mainRepositoryID]
     }
 
     func finishMutation(
@@ -206,8 +253,11 @@ extension AppCoordinator {
         operationID: UUID,
         wasCommit: Bool,
         refreshUpstream: Bool = false,
-        failure: OperationFailure?
+        additionalRepositoryIDs: [UUID] = [],
+        failure: OperationFailure?,
+        reportFailureWhenStale: Bool = false
     ) {
+        lastMutationFailure = failure
         let ownsTask = mutationID == operationID
         if ownsTask {
             mutationTask = nil
@@ -218,16 +268,22 @@ extension AppCoordinator {
             loadNextHistoryPage()
         }
         runtime.enqueueStatusRefreshes(
-            for: [repositoryID],
+            for: [repositoryID] + additionalRepositoryIDs.filter { $0 != repositoryID },
             refreshUpstream: refreshUpstream,
             requestKind: .destructiveOperation
         )
         guard mutationGeneration == generation,
               state.uiState.selectedRepoID == repositoryID else {
+            var shouldPublish = false
             if ownsTask {
                 mutationState = .idle
-                publish()
+                shouldPublish = true
             }
+            if reportFailureWhenStale, let failure {
+                errorMessage = failure.copyText
+                shouldPublish = true
+            }
+            if shouldPublish { publish() }
             return
         }
         clearSelectedDiff()

@@ -16,6 +16,56 @@ final class GitRunnerTests: XCTestCase {
             XCTAssertFalse(result.standardError.isEmpty)
         }
     }
+    func testRunWithoutTimeoutCapturesOutput() async throws {
+        let request = ProcessExecutionRequest(
+            repository: nil,
+            arguments: ["--version"],
+            input: nil,
+            environment: [:],
+            acceptedExitCodes: [0],
+            outputLimit: ProcessRunner.defaultOutputLimit,
+            priority: .normal
+        )
+        let result = try await GitRunner().executeWithoutTimeout(request)
+        XCTAssertTrue(String(decoding: result.standardOutput, as: UTF8.self).hasPrefix("git version"))
+    }
+    func testInvocationEnvironmentRemovesInheritedRepositoryOverrides() {
+        let environment = GitProcessEnvironment.prepare(
+            inherited: [
+                "PATH": "/usr/bin",
+                "GIT_DIR": "/outside/.git",
+                "GIT_WORK_TREE": "/outside",
+                "GIT_COMMON_DIR": "/outside/.git",
+                "GIT_INDEX_FILE": "/outside/index",
+                "GIT_OBJECT_DIRECTORY": "/outside/objects",
+                "GIT_ALTERNATE_OBJECT_DIRECTORIES": "/outside/alternates",
+                "GIT_NAMESPACE": "outside",
+                "GIT_PREFIX": "nested/",
+                "GIT_CEILING_DIRECTORIES": "/outside"
+            ],
+            overrides: [
+                "GIT_INDEX_FILE": "/repo/.git/transfer/index",
+                "GIT_CEILING_DIRECTORIES": "/repo",
+                "GIT_TERMINAL_PROMPT": "0"
+            ]
+        )
+
+        XCTAssertEqual(environment["PATH"], "/usr/bin")
+        XCTAssertEqual(environment["GIT_INDEX_FILE"], "/repo/.git/transfer/index")
+        XCTAssertEqual(environment["GIT_CEILING_DIRECTORIES"], "/repo")
+        XCTAssertEqual(environment["GIT_TERMINAL_PROMPT"], "0")
+        XCTAssertEqual(environment["GIT_OBJECT_DIRECTORY"], "/outside/objects")
+        XCTAssertEqual(environment["GIT_ALTERNATE_OBJECT_DIRECTORIES"], "/outside/alternates")
+        for key in [
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_COMMON_DIR",
+            "GIT_NAMESPACE",
+            "GIT_PREFIX"
+        ] {
+            XCTAssertNil(environment[key])
+        }
+    }
     func testStreamingRunReportsStandardErrorChunks() async throws {
         let runner = GitRunner()
         let streamAndContinuation = AsyncStream<Data>.makeStream()
@@ -241,11 +291,16 @@ final class GitRunnerTests: XCTestCase {
         let limiter = GitProcessLimiter(maximumConcurrent: 1)
         try await limiter.acquire(priority: .normal)
         let runner = GitRunner(limiter: limiter)
-        let command = Task {
-            try await runner.run(
-                arguments: ["-c", "alias.marker=!touch \(marker.path)", "marker"]
-            )
-        }
+        let request = ProcessExecutionRequest(
+            repository: nil,
+            arguments: ["-c", "alias.marker=!touch \(marker.path)", "marker"],
+            input: nil,
+            environment: [:],
+            acceptedExitCodes: [0],
+            outputLimit: ProcessRunner.defaultOutputLimit,
+            priority: .normal
+        )
+        let command = Task { try await runner.executeWithoutTimeout(request) }
 
         try await waitUntil { await limiter.waitingCountForTesting == 1 }
         command.cancel()
@@ -258,7 +313,6 @@ final class GitRunnerTests: XCTestCase {
         } catch {
             XCTFail("Unexpected cancellation error: \(error)")
         }
-        try await Task.sleep(for: .milliseconds(100))
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
         let laterResult = try await runner.run(arguments: ["--version"])
         XCTAssertEqual(laterResult.exitCode, 0)

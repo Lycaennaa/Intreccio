@@ -117,12 +117,114 @@ extension GitServiceIntegrationTests {
     coordinator.selectRepository(linkedRepository.id)
     let selector = ChangesWorktreeSelectorController(coordinator: coordinator)
     selector.reload(repository: linkedRepository)
-    try await waitUntil(description: "separate Git-dir selector lists main and linked worktrees") {
-      let listedPaths = selector.button.itemArray.compactMap { $0.representedObject as? URL }
-        .map(\.standardizedFileURL)
-      return listedPaths.contains(fixture.repository.standardizedFileURL)
-        && listedPaths.contains(fixture.worktree.standardizedFileURL)
-    }
+    await selector.waitForRefresh()
+    let listedPaths = selector.button.itemArray.compactMap { $0.representedObject as? URL }
+      .map(\.standardizedFileURL)
+    XCTAssertTrue(listedPaths.contains(fixture.repository.standardizedFileURL))
+    XCTAssertTrue(listedPaths.contains(fixture.worktree.standardizedFileURL))
+    _ = await coordinator.shutdown()
+  }
+
+  @MainActor
+  func testBringChangesUsesDiscoveredMainWhenDescriptorHasNoMainURL() async throws {
+    let fixture = try makeSeparateGitDirectoryFixture()
+    let rebuilt = rebuildSeparateGitDirectoryRepositories(fixture)
+    let catalogRepository = try XCTUnwrap(
+      rebuilt.repositories.first { $0.canonicalURL == fixture.worktree }
+    )
+    let repository = RepoDescriptor(
+      id: catalogRepository.id,
+      source: catalogRepository.source,
+      url: catalogRepository.url,
+      canonicalURL: catalogRepository.canonicalURL,
+      resourceID: catalogRepository.resourceID,
+      relativePath: catalogRepository.relativePath,
+      availability: catalogRepository.availability,
+      gitDirectoryInfo: catalogRepository.gitDirectoryInfo
+    )
+    XCTAssertNil(repository.mainRepositoryURL)
+    try "worktree changes\n".write(
+      to: fixture.worktree.appendingPathComponent("tracked.txt"),
+      atomically: true,
+      encoding: .utf8
+    )
+    let sourceStatus = try await GitService().status(repository: fixture.worktree)
+    let coordinator = AppCoordinator(
+      stateStore: StateStore(fileURL: fixture.directory.appendingPathComponent("state.json")),
+      repositoryCatalogFixture: RepositoryCatalogFixture(repositories: [repository])
+    )
+    coordinator.setMode(.changes)
+    coordinator.selectRepository(repository.id)
+    await waitForSelectedStatus(coordinator, containing: "tracked.txt")
+    let selector = ChangesWorktreeSelectorController(coordinator: coordinator)
+    selector.reload(repository: repository)
+    selector.configureTransfer(status: sourceStatus, mutationState: .idle)
+    await selector.waitForRefresh()
+    XCTAssertTrue(selector.bringChangesToMainButton.isEnabled)
+
+    let transferWindow = try confirmTransferWithIdleWorktreeWarning(
+      selector.bringChangesToMainButton
+    )
+    defer { transferWindow.close() }
+    XCTAssertEqual(coordinator.snapshot.mutationState, .running)
+    let transferTask = try XCTUnwrap(coordinator.mutationTask)
+    let transferFailure = await transferTask.value
+    XCTAssertNil(transferFailure)
+    XCTAssertEqual(coordinator.snapshot.mutationState, .idle)
+    XCTAssertEqual(
+      try String(contentsOf: fixture.repository.appendingPathComponent("tracked.txt"), encoding: .utf8),
+      "worktree changes\n"
+    )
+    let finalSourceStatus = try await GitService().status(repository: fixture.worktree)
+    XCTAssertEqual(finalSourceStatus, sourceStatus)
+    selector.clear()
+    _ = await coordinator.shutdown()
+  }
+
+  @MainActor
+  func testBringWorktreeButtonTracksMainCleanliness() async throws {
+    let fixture = try makeSeparateGitDirectoryFixture()
+    let rebuilt = rebuildSeparateGitDirectoryRepositories(fixture)
+    let linkedRepository = try XCTUnwrap(
+      rebuilt.repositories.first { $0.canonicalURL == fixture.worktree }
+    )
+    try "worktree changes\n".write(
+      to: fixture.worktree.appendingPathComponent("tracked.txt"),
+      atomically: true,
+      encoding: .utf8
+    )
+    let sourceStatus = try await GitService().status(repository: fixture.worktree)
+    let coordinator = AppCoordinator(
+      stateStore: StateStore(fileURL: fixture.directory.appendingPathComponent("state.json")),
+      repositoryCatalogFixture: RepositoryCatalogFixture(repositories: rebuilt.repositories)
+    )
+    coordinator.setMode(.changes)
+    coordinator.selectRepository(linkedRepository.id)
+    let selector = ChangesWorktreeSelectorController(coordinator: coordinator)
+    selector.reload(repository: linkedRepository)
+    selector.configureTransfer(status: sourceStatus, mutationState: .idle)
+    await selector.waitForRefresh()
+    XCTAssertTrue(selector.bringChangesToMainButton.isEnabled)
+
+    try "main changes\n".write(
+      to: fixture.repository.appendingPathComponent("tracked.txt"),
+      atomically: true,
+      encoding: .utf8
+    )
+    let dirtyMainSelector = ChangesWorktreeSelectorController(coordinator: coordinator)
+    dirtyMainSelector.reload(repository: linkedRepository)
+    dirtyMainSelector.configureTransfer(status: sourceStatus, mutationState: .idle)
+    await dirtyMainSelector.waitForRefresh()
+    XCTAssertFalse(dirtyMainSelector.bringChangesToMainButton.isEnabled)
+    XCTAssertTrue(dirtyMainSelector.bringChangesToMainButton.toolTip.contains("Main worktree has changes"))
+    try runGit(at: fixture.repository, arguments: ["reset", "--hard", "HEAD"])
+    let worktreeMenu = try XCTUnwrap(dirtyMainSelector.button.menu)
+    dirtyMainSelector.menuWillOpen(worktreeMenu)
+    await dirtyMainSelector.waitForRefresh()
+    XCTAssertTrue(dirtyMainSelector.bringChangesToMainButton.isEnabled)
+    dirtyMainSelector.menuDidClose(worktreeMenu)
+    selector.clear()
+    dirtyMainSelector.clear()
     _ = await coordinator.shutdown()
   }
   func testLinkedWorktreeChangesRemainIsolatedAndAreDiscoverable() async throws {
@@ -234,5 +336,45 @@ extension GitServiceIntegrationTests {
       gitDirectory: gitDirectory,
       worktree: worktree
     )
+  }
+  @MainActor
+  private func waitForSelectedStatus(_ coordinator: AppCoordinator, containing path: String) async {
+    if coordinator.selectedStatus?.changes.contains(where: { $0.path == path }) == true { return }
+    var didObserveStatus = false
+    let statusLoaded = expectation(description: "selected status loads \(path)")
+    let handlerID = coordinator.addSnapshotHandler { _ in
+      guard !didObserveStatus,
+            coordinator.selectedStatus?.changes.contains(where: { $0.path == path }) == true else {
+        return
+      }
+      didObserveStatus = true
+      statusLoaded.fulfill()
+    }
+    defer { coordinator.removeSnapshotHandler(handlerID) }
+    await fulfillment(of: [statusLoaded], timeout: 1)
+  }
+
+  @MainActor
+  private func confirmTransferWithIdleWorktreeWarning(_ button: NSButton) throws -> NSWindow {
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 420, height: 220),
+      styleMask: [.titled],
+      backing: .buffered,
+      defer: false
+    )
+    window.contentView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 220))
+    window.contentView?.addSubview(button)
+    window.makeKeyAndOrderFront(nil)
+    func buttons(in view: NSView) -> [NSButton] {
+      let ownButton = (view as? NSButton).map { [$0] } ?? []
+      return ownButton + view.subviews.flatMap(buttons(in:))
+    }
+    button.performClick(nil)
+    let cancellationSheet = try XCTUnwrap(window.attachedSheet)
+    try XCTUnwrap(buttons(in: cancellationSheet).first { $0.title == "Cancel" }).performClick(nil)
+    button.performClick(nil)
+    let confirmationSheet = try XCTUnwrap(window.attachedSheet)
+    try XCTUnwrap(buttons(in: confirmationSheet).first { $0.title == "Transfer to Main" }).performClick(nil)
+    return window
   }
 }

@@ -278,4 +278,16 @@ private actor CloneRecordingRunner: ProcessRunning {
         )
         return recordedGitResult()
     }
+    func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult {
+        try await execute(
+            repository: request.repository,
+            arguments: request.arguments,
+            input: request.input,
+            environment: request.environment,
+            acceptedExitCodes: request.acceptedExitCodes,
+            outputLimit: request.outputLimit,
+            timeout: ProcessRunner.mutationTimeout,
+            priority: request.priority
+        )
+    }
 }

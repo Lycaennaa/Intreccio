@@ -64,18 +64,19 @@ extension AppCoordinator {
         return succeeded
     }
 
-    func waitForActiveMutation() async {
-        await mutationTask?.value
+    func waitForActiveMutation() async -> OperationFailure? {
+        guard let mutationTask else { return lastMutationFailure }
+        return await mutationTask.value
     }
 
     func shutdown() async -> Bool {
         isShuttingDown = true
-        let tasks = [
-            startupTask,
-            mutationTask,
-            uiSaveTask,
-            rememberedApplicationSaveTask
-        ].compactMap(\.self)
+        let activeMutationTask = mutationTask
+        var tasks = [startupTask, uiSaveTask, rememberedApplicationSaveTask].compactMap(\.self)
+        if let activeMutationTask {
+            activeMutationTask.cancel()
+            tasks.append(Task { _ = await activeMutationTask.value })
+        }
         mutationGeneration &+= 1
         tasks.forEach { $0.cancel() }
         startupTask = nil
@@ -85,6 +86,7 @@ extension AppCoordinator {
         async let catalogShutdown: Void = catalog.shutdown()
         async let runtimeShutdown: Void = runtime.cancelAndDrain()
         async let selectedSessionShutdown: Void = selectedSession.cancelAndDrain()
+        // Drain an active worktree apply instead of killing Git mid-write during shutdown.
         await TaskCompletionDrain.waitForCompletion(tasks)
         _ = await (catalogShutdown, runtimeShutdown, selectedSessionShutdown)
         let saved = await flushState()

@@ -57,6 +57,18 @@ actor RecordingGitRunner {
             throw error
         }
     }
+    func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult {
+        try await execute(
+            repository: request.repository,
+            arguments: request.arguments,
+            input: request.input,
+            environment: request.environment,
+            acceptedExitCodes: request.acceptedExitCodes,
+            outputLimit: request.outputLimit,
+            timeout: ProcessRunner.mutationTimeout,
+            priority: request.priority
+        )
+    }
     func executeStreaming(
         repository: URL?,
         arguments: [String],
@@ -109,4 +121,85 @@ nonisolated func historyBatchRecord(objectID: String, parentID: String? = nil, s
     record.append(object)
     record.append(0x0A)
     return record
+}
+
+actor FailAfterApplyGitRunner: ProcessRunning {
+    private let base: GitRunner
+    private var didInjectFailure = false
+    private let concurrentEditPath: String?
+
+    init(base: GitRunner, concurrentEditPath: String? = nil) {
+        self.base = base
+        self.concurrentEditPath = concurrentEditPath
+    }
+
+    func execute(
+        repository: URL?,
+        arguments: [String],
+        input: Data?,
+        environment: [String: String],
+        acceptedExitCodes: Set<Int32>,
+        outputLimit: Int,
+        timeout: Duration,
+        priority: ProcessPriority
+    ) async throws -> ProcessCommandResult {
+        try await base.execute(
+            repository: repository,
+            arguments: arguments,
+            input: input,
+            environment: environment,
+            acceptedExitCodes: acceptedExitCodes,
+            outputLimit: outputLimit,
+            timeout: timeout,
+            priority: priority
+        )
+    }
+
+    func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult {
+        let result = try await base.executeWithoutTimeout(request)
+        guard !didInjectFailure, request.arguments == ["apply", "--index", "--binary"] else {
+            return result
+        }
+        didInjectFailure = true
+        if let concurrentEditPath, let repository = request.repository {
+            try "Concurrent edit\n".write(
+                to: repository.appendingPathComponent(concurrentEditPath),
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+        throw ProcessRunnerError.nonZeroExit(
+            ProcessCommandResult(
+                exitCode: 1,
+                standardOutput: result.standardOutput,
+                standardError: Data("Injected apply failure after writes".utf8)
+            )
+        )
+    }
+
+    func executeStreaming(
+        repository: URL?,
+        arguments: [String],
+        input: Data?,
+        environment: [String: String],
+        acceptedExitCodes: Set<Int32>,
+        outputLimit: Int,
+        timeout: Duration,
+        priority: ProcessPriority,
+        progress: @escaping @Sendable (ProcessOutputStream, Data) -> Void,
+        control: ProcessControl?
+    ) async throws -> ProcessCommandResult {
+        try await base.executeStreaming(
+            repository: repository,
+            arguments: arguments,
+            input: input,
+            environment: environment,
+            acceptedExitCodes: acceptedExitCodes,
+            outputLimit: outputLimit,
+            timeout: timeout,
+            priority: priority,
+            progress: progress,
+            control: control
+        )
+    }
 }

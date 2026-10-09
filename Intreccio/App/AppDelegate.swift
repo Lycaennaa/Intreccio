@@ -42,8 +42,31 @@ struct SingleInstanceLock {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private enum TerminationAttempt {
+        case idle
+        case prompting
+        case waiting(requestID: UUID, sender: NSApplication)
+        case flushing(requestID: UUID, sender: NSApplication)
+        case terminating
+    }
+
     var mainWindowController: MainWindowController?
-    private var terminationPending = false
+    private var terminationAttempt: TerminationAttempt = .idle
+    private var mutationCompletionTask: Task<Void, Never>?
+    private var terminationTimeoutTask: Task<Void, Never>?
+    private let mutationWaitTimeout: Duration
+    private let terminationReplyHandler: @MainActor (NSApplication, Bool) -> Void
+
+    init(
+        mutationWaitTimeout: Duration = .seconds(120),
+        terminationReplyHandler: (@MainActor (NSApplication, Bool) -> Void)? = nil
+    ) {
+        self.mutationWaitTimeout = mutationWaitTimeout
+        self.terminationReplyHandler = terminationReplyHandler ?? { application, shouldTerminate in
+            application.reply(toApplicationShouldTerminate: shouldTerminate)
+        }
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -61,39 +84,112 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let mainWindowController else { return .terminateNow }
-        guard !terminationPending else { return .terminateLater }
-        terminationPending = true
-        if mainWindowController.hasActiveMutation {
+        guard case .idle = terminationAttempt else { return .terminateLater }
+        terminationAttempt = .prompting
+        if mainWindowController.hasActiveMutation || mutationCompletionTask != nil {
             let alert = NSAlert()
             alert.alertStyle = .warning
             alert.messageText = "Git operation in progress"
-            alert.informativeText = "Wait for the operation to finish before quitting, or cancel quit and return to the app."
+            alert.informativeText = "Wait for the operation to finish before quitting. "
+                + "If it takes longer than two minutes, quit is canceled and the app stays open."
             alert.addButton(withTitle: "Wait and Quit")
             alert.addButton(withTitle: "Cancel Quit")
             guard let window = mainWindowController.window else {
-                terminationPending = false
+                terminationAttempt = .idle
                 return .terminateCancel
             }
             alert.beginSheetModal(for: window) { [weak self] response in
                 guard response == .alertFirstButtonReturn else {
-                    self?.terminationPending = false
-                    sender.reply(toApplicationShouldTerminate: false)
+                    self?.cancelTerminationPrompt()
+                    reply(to: sender, shouldTerminate: false)
                     return
                 }
-                Task {
-                    let saved = await mainWindowController.waitForMutationAndFlushState()
-                    sender.reply(toApplicationShouldTerminate: saved)
-                    if !saved { self?.terminationPending = false }
+                guard let self else {
+                    reply(to: sender, shouldTerminate: false)
+                    return
                 }
+                guard case .prompting = self.terminationAttempt else { return }
+                self.waitForMutationAndTerminate(mainWindowController, sender: sender)
             }
             return .terminateLater
         }
+        mainWindowController.closeMutationAdmission()
+        let requestID = UUID()
+        terminationAttempt = .flushing(requestID: requestID, sender: sender)
         Task {
             let saved = await mainWindowController.flushState()
-            sender.reply(toApplicationShouldTerminate: saved)
-            if !saved { terminationPending = false }
+            guard case .flushing(let activeID, let activeSender) = terminationAttempt,
+                  activeID == requestID else { return }
+            if saved {
+                terminationAttempt = .terminating
+            } else {
+                terminationAttempt = .idle
+                mainWindowController.reopenMutationAdmission()
+            }
+            reply(to: activeSender, shouldTerminate: saved)
         }
         return .terminateLater
+    }
+
+    private func waitForMutationAndTerminate(
+        _ windowController: MainWindowController,
+        sender: NSApplication
+    ) {
+        windowController.closeMutationAdmission()
+        let requestID = UUID()
+        terminationAttempt = .waiting(requestID: requestID, sender: sender)
+        terminationTimeoutTask?.cancel()
+        terminationTimeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: mutationWaitTimeout)
+            } catch {
+                return
+            }
+            guard let self,
+                  case .waiting(let activeID, let activeSender) = self.terminationAttempt,
+                  activeID == requestID else { return }
+            self.terminationAttempt = .idle
+            self.terminationTimeoutTask = nil
+            reply(to: activeSender, shouldTerminate: false)
+        }
+        guard mutationCompletionTask == nil else { return }
+        mutationCompletionTask = Task { [weak self] in
+            let operationSucceeded = await windowController.waitForMutation()
+            guard let self else { return }
+            self.mutationCompletionTask = nil
+            guard case .waiting(let activeID, let activeSender) = self.terminationAttempt else {
+                windowController.reopenMutationAdmission()
+                return
+            }
+            self.terminationTimeoutTask?.cancel()
+            self.terminationTimeoutTask = nil
+            guard operationSucceeded else {
+                self.terminationAttempt = .idle
+                windowController.reopenMutationAdmission()
+                reply(to: activeSender, shouldTerminate: false)
+                return
+            }
+            self.terminationAttempt = .flushing(requestID: activeID, sender: activeSender)
+            let saved = await windowController.flushState()
+            guard case .flushing(let currentID, let currentSender) = self.terminationAttempt,
+                  currentID == activeID else { return }
+            if saved {
+                self.terminationAttempt = .terminating
+            } else {
+                self.terminationAttempt = .idle
+                windowController.reopenMutationAdmission()
+            }
+            reply(to: currentSender, shouldTerminate: saved)
+        }
+    }
+
+    private func cancelTerminationPrompt() {
+        guard case .prompting = terminationAttempt else { return }
+        terminationAttempt = .idle
+    }
+
+    private func reply(to sender: NSApplication, shouldTerminate: Bool) {
+        terminationReplyHandler(sender, shouldTerminate)
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

@@ -38,6 +38,16 @@ nonisolated enum GitServiceError: Error, Equatable, CustomStringConvertible {
     case noStash
     case dirtyWorktreeForStashRestore([String])
     case unresolvedStashConflicts([String])
+    case worktreeTransferRequiresLinkedSource
+    case noWorktreeChangesToBring
+    case dirtyMainWorktreeForTransfer([String])
+    case conflictedWorktreeForTransfer([String])
+    case unsupportedWorktreeTransferSubmodule(String)
+    case unsupportedWorktreeTransferPath(String)
+    case worktreeTransferStateChanged
+    case sourceWorktreeRequiresCommit
+    case mainWorktreeRequiresCommit
+    case worktreeTransferApplyFailed(paths: [String], reason: String)
     case operationStateInspectionFailed(path: String, code: Int32)
 
     var description: String {
@@ -92,7 +102,27 @@ nonisolated enum GitServiceError: Error, Equatable, CustomStringConvertible {
             "Commit, discard, or stash current changes before restoring a stash: \(paths.joined(separator: ", "))"
         case .unresolvedStashConflicts(let paths):
             "Resolve conflicts before stashing changes: \(paths.joined(separator: ", "))"
-        case .operationStateInspectionFailed(let path, let code):
+        case .worktreeTransferRequiresLinkedSource:
+            "Bring changes from a linked worktree into its clean main worktree"
+        case .noWorktreeChangesToBring: "The selected worktree has no changes to bring"
+        case .dirtyMainWorktreeForTransfer(let paths):
+            "Commit, stash, or discard main worktree changes before bringing worktree changes: "
+                + paths.joined(separator: ", ")
+        case .conflictedWorktreeForTransfer(let paths):
+            "Resolve worktree conflicts before bringing changes: \(paths.joined(separator: ", "))"
+        case .unsupportedWorktreeTransferSubmodule(let path):
+            "Cannot bring submodule changes because nested repository work could be overwritten: \(path)"
+        case .unsupportedWorktreeTransferPath(let path):
+            "Cannot safely bring changes from this path: \(path)"
+        case .worktreeTransferStateChanged:
+            "A worktree changed while preparing the transfer. Refresh and try again."
+        case .sourceWorktreeRequiresCommit: "Create the first commit before bringing worktree changes"
+        case .mainWorktreeRequiresCommit: "Create the first main-worktree commit before bringing changes"
+        case .worktreeTransferApplyFailed(let paths, let reason):
+            "Transfer failed for \(paths.joined(separator: ", ")): \(reason). "
+                + "Main may contain partial transfer changes. "
+                + "They were left in place to avoid overwriting concurrent edits."
+        case .operationStateInspectionFailed(path: let path, code: let code):
             "Could not inspect Git operation state at \(path): \(String(cString: strerror(code)))"
         }
     }

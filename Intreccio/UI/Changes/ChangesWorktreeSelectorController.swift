@@ -8,8 +8,10 @@ private struct WorktreeMenuData {
 @MainActor
 final class ChangesWorktreeSelectorController: NSObject, NSMenuDelegate {
   let button = NSPopUpButton(frame: .zero, pullsDown: false)
+  var bringChangesToMainButton: NSButton { transferController.button }
 
   private let coordinator: AppCoordinator
+  private let transferController: ChangesWorktreeTransferController
   private var currentRepository: RepoDescriptor?
   private var worktreeMenuData: WorktreeMenuData?
   private var worktrees: [GitWorktree] { worktreeMenuData?.worktrees ?? [] }
@@ -23,9 +25,12 @@ final class ChangesWorktreeSelectorController: NSObject, NSMenuDelegate {
   private var isMenuOpen = false
   private var needsMenuUpdate = false
   private var pendingWorktreeMenuData: WorktreeMenuData?
+  private var transferSourceStatus: RepoStatus?
+  private var transferMutationIsRunning = false
 
   init(coordinator: AppCoordinator) {
     self.coordinator = coordinator
+    transferController = ChangesWorktreeTransferController(coordinator: coordinator)
     super.init()
     button.target = self
     button.action = #selector(worktreeSelected(_:))
@@ -55,6 +60,9 @@ final class ChangesWorktreeSelectorController: NSObject, NSMenuDelegate {
     isSwitching = false
     pendingWorktreeURL = nil
     loadFailure = nil
+    transferSourceStatus = nil
+    transferMutationIsRunning = false
+    transferController.clear()
     button.isEnabled = false
     button.toolTip = ""
     refreshMenu()
@@ -69,9 +77,13 @@ final class ChangesWorktreeSelectorController: NSObject, NSMenuDelegate {
        currentRepository?.canonicalURL == repository.canonicalURL {
       guard currentRepository?.gitDirectoryInfo != repository.gitDirectoryInfo
         || currentRepository?.mainRepositoryURL != repository.mainRepositoryURL
-        || currentRepository?.displayName != repository.displayName else { return }
+        || currentRepository?.displayName != repository.displayName else {
+          updateTransferButton()
+          return
+        }
       currentRepository = repository
       refreshMenu()
+      updateTransferButton()
       return
     }
     selectionTask?.cancel()
@@ -79,10 +91,24 @@ final class ChangesWorktreeSelectorController: NSObject, NSMenuDelegate {
     isSwitching = false
     pendingWorktreeURL = nil
     pendingWorktreeMenuData = nil
+    transferSourceStatus = nil
+    transferMutationIsRunning = false
     currentRepository = repository
     worktreeMenuData = nil
     loadFailure = nil
     loadWorktrees(repository: repository)
+  }
+
+  func configureTransfer(status: RepoStatus?, mutationState: RepositoryMutationState) {
+    transferSourceStatus = status
+    transferMutationIsRunning = mutationState == .running
+    updateTransferButton()
+  }
+
+  func waitForRefresh() async {
+    let currentLoadTask = loadTask
+    await currentLoadTask?.value
+    await transferController.waitForMainStatusRefresh()
   }
 
   func menuNeedsUpdate(_ menu: NSMenu) {
@@ -91,6 +117,7 @@ final class ChangesWorktreeSelectorController: NSObject, NSMenuDelegate {
 
   func menuWillOpen(_ menu: NSMenu) {
     isMenuOpen = true
+    transferController.refreshMainStatus()
     guard !isLoading, !isSwitching, loadTask == nil, let currentRepository else { return }
     loadFailure = nil
     loadWorktrees(repository: currentRepository, preservingCachedWorktrees: true)
@@ -238,6 +265,16 @@ final class ChangesWorktreeSelectorController: NSObject, NSMenuDelegate {
     }
     button.isEnabled = !isLoading && !isSwitching && (!worktrees.isEmpty || loadFailure != nil)
     button.toolTip = loadFailure ?? "Switch worktrees. Changes stay in the selected worktree."
+    updateTransferButton()
+  }
+
+  private func updateTransferButton() {
+    transferController.configure(
+      repository: currentRepository,
+      discoveredMainRepositoryURL: worktreeMenuData?.mainRepositoryURL,
+      status: transferSourceStatus,
+      mutationIsRunning: transferMutationIsRunning
+    )
   }
 
   @objc private func worktreeSelected(_ sender: NSPopUpButton) {

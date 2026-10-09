@@ -20,11 +20,12 @@ final class AppCoordinator {
     private(set) var snapshot: AppSnapshot
 
     var startupTask: Task<Void, Never>?
-    var mutationTask: Task<Void, Never>?
+    var mutationTask: Task<OperationFailure?, Never>?
     var mutationID: UUID?
     var mutationGeneration: UInt64 = 0
 
     var isShuttingDown = false
+    var mutationAdmissionClosed = false
     var uiSaveTask: Task<Void, Never>?
     var rememberedApplicationSaveTask: Task<Void, Never>?
 
@@ -53,6 +54,7 @@ final class AppCoordinator {
         set { selectedSession.commitState = newValue }
     }
     var mutationState: RepositoryMutationState = .idle
+    var lastMutationFailure: OperationFailure?
     var commitMessage = ""
     var usesDefaultCommitMessage = true
     var amendSession: AmendSession?

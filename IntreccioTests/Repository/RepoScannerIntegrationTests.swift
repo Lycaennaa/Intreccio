@@ -193,6 +193,18 @@ private actor BlockingGitRunner: ProcessRunning {
             pending.append((repository, continuation))
         }
     }
+    func executeWithoutTimeout(_ request: ProcessExecutionRequest) async -> ProcessCommandResult {
+        await execute(
+            repository: request.repository,
+            arguments: request.arguments,
+            input: request.input,
+            environment: request.environment,
+            acceptedExitCodes: request.acceptedExitCodes,
+            outputLimit: request.outputLimit,
+            timeout: ProcessRunner.mutationTimeout,
+            priority: request.priority
+        )
+    }
     func executeStreaming(
         repository: URL?,
         arguments: [String],

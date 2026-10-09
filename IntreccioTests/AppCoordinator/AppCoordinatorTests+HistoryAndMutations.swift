@@ -88,7 +88,10 @@ extension AppCoordinatorTests {
         coordinator.selectRepository(repositoryID)
         try await waitUntil { coordinator.repositoryRefreshStates[repositoryID]?.status != nil }
 
+        coordinator.mutationAdmissionClosed = true
         coordinator.stageAll()
+        XCTAssertFalse(coordinator.hasActiveMutation)
+        coordinator.mutationAdmissionClosed = false
         try await waitUntil {
             coordinator.mutationState == .idle
                 && coordinator.repositoryRefreshStates[repositoryID]?.status?.changes.first?.hasStagedChange == true
@@ -453,4 +456,34 @@ extension AppCoordinatorTests {
 
     }
 
+    func testStaleTransferFailureRemainsVisibleAfterSelectionChanges() async {
+        let coordinator = AppCoordinator()
+        let failure = OperationFailure.message(
+            "Main may contain partial transfer changes.",
+            title: "Could not bring worktree changes to main",
+            recoverySuggestion: "Inspect the main worktree before proceeding."
+        )
+
+        coordinator.finishMutation(
+            repositoryID: UUID(),
+            generation: 1,
+            operationID: UUID(),
+            wasCommit: false,
+            failure: failure,
+            reportFailureWhenStale: true
+        )
+
+        XCTAssertEqual(coordinator.lastMutationFailure, failure)
+        XCTAssertEqual(coordinator.errorMessage, failure.copyText)
+        let capturedFailure = OperationFailure.message(
+            "Operation failed after the termination wait began.",
+            title: "Operation failed",
+            recoverySuggestion: "Review the operation result."
+        )
+        coordinator.lastMutationFailure = nil
+        coordinator.mutationTask = Task<OperationFailure?, Never> { capturedFailure }
+        let awaitedFailure = await coordinator.waitForActiveMutation()
+        coordinator.lastMutationFailure = nil
+        XCTAssertEqual(awaitedFailure, capturedFailure)
+    }
 }

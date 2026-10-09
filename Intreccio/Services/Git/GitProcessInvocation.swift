@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 
 nonisolated final class ProcessInvocation: @unchecked Sendable {
+
     private enum StopReason {
         case timeout
         case cancellation
@@ -83,7 +84,8 @@ nonisolated final class ProcessInvocation: @unchecked Sendable {
     private let environment: [String: String]
     private let acceptedExitCodes: Set<Int32>
     private let outputLimit: Int
-    private let timeout: Duration
+    private let outputLimitBehavior: ProcessOutputLimitBehavior
+    private let timeout: Duration?
     private let input: Data?
     private let outputHandler: (@Sendable (ProcessOutputStream, Data) -> Void)?
     private let control: ProcessControl?
@@ -98,7 +100,8 @@ nonisolated final class ProcessInvocation: @unchecked Sendable {
         environment: [String: String],
         acceptedExitCodes: Set<Int32>,
         outputLimit: Int,
-        timeout: Duration,
+        outputLimitBehavior: ProcessOutputLimitBehavior = .terminate,
+        timeout: Duration?,
         outputHandler: (@Sendable (ProcessOutputStream, Data) -> Void)? = nil,
         control: ProcessControl? = nil
     ) {
@@ -109,6 +112,7 @@ nonisolated final class ProcessInvocation: @unchecked Sendable {
         self.input = input
         self.acceptedExitCodes = acceptedExitCodes
         self.outputLimit = outputLimit
+        self.outputLimitBehavior = outputLimitBehavior
         self.timeout = timeout
         self.outputHandler = outputHandler
         self.control = control
@@ -116,20 +120,31 @@ nonisolated final class ProcessInvocation: @unchecked Sendable {
 
     func start() async throws -> ProcessCommandResult {
         try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                send(.installContinuation(continuation))
-                installHandlers()
-                do {
-                    let processID = try launchProcess()
-                    writeInputAndClose()
-                    send(.launched(processID))
-                    send(.timerPrepared(makeTimeoutTimer()))
-                } catch {
-                    send(.launchFailed(error.localizedDescription))
-                }
-            }
+            try await startProcess()
         } onCancel: {
             send(.stopRequested(.cancellation))
+        }
+    }
+
+    func startFinishingAfterLaunch() async throws -> ProcessCommandResult {
+        try Task.checkCancellation()
+        return try await startProcess()
+    }
+
+    private func startProcess() async throws -> ProcessCommandResult {
+        try await withCheckedThrowingContinuation { continuation in
+            send(.installContinuation(continuation))
+            installHandlers()
+            do {
+                let processID = try launchProcess()
+                writeInputAndClose()
+                send(.launched(processID))
+                if let timeoutTimer = makeTimeoutTimer() {
+                    send(.timerPrepared(timeoutTimer))
+                }
+            } catch {
+                send(.launchFailed(error.localizedDescription))
+            }
         }
     }
 
@@ -227,7 +242,8 @@ nonisolated final class ProcessInvocation: @unchecked Sendable {
         if !data.isEmpty, outputHandler != nil {
             effects.append(.reportOutput(stream, data))
         }
-        if exceededLimit {
+        if exceededLimit,
+           outputLimitBehavior == .terminate {
             requestStop(.outputLimit(stream), effects: &effects)
         }
     }
@@ -356,8 +372,10 @@ nonisolated final class ProcessInvocation: @unchecked Sendable {
         ))
 
         let invocationArguments = [executable] + (repository.map { ["-C", $0.path] } ?? []) + arguments
-        var processEnvironment = ProcessInfo.processInfo.environment
-        processEnvironment.merge(environment) { _, new in new }
+        let processEnvironment = GitProcessEnvironment.prepare(
+            inherited: ProcessInfo.processInfo.environment,
+            overrides: environment
+        )
         let environmentStrings = processEnvironment.map { "\($0.key)=\($0.value)" }
         var processID: pid_t = 0
         let spawnResult = withCStringArray(invocationArguments) { argumentPointers in
@@ -409,7 +427,8 @@ nonisolated final class ProcessInvocation: @unchecked Sendable {
         }
     }
 
-    private func makeTimeoutTimer() -> DispatchSourceTimer {
+    private func makeTimeoutTimer() -> DispatchSourceTimer? {
+        guard let timeout else { return nil }
         let components = timeout.components
         let seconds = max(0, components.seconds)
         let nanoseconds = max(0, components.attoseconds / 1_000_000_000)

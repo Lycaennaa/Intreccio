@@ -115,4 +115,9 @@ extension AppShellTests {
         }
         return nil
     }
+
+    @MainActor
+    func allDescendantViews(in view: NSView) -> [NSView] {
+        [view] + view.subviews.flatMap { allDescendantViews(in: $0) }
+    }
 }

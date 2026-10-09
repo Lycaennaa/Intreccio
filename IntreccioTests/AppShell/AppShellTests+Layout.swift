@@ -9,11 +9,6 @@ private func allMenuItems(in menu: NSMenu) -> [NSMenuItem] {
 }
 
 @MainActor
-private func allDescendantViews(in view: NSView) -> [NSView] {
-    [view] + view.subviews.flatMap { allDescendantViews(in: $0) }
-}
-
-@MainActor
 private final class ContextMenuTestDelegate: NSObject, NSMenuDelegate {
     private weak var original: NSMenuDelegate?
 
@@ -363,35 +358,6 @@ extension AppShellTests {
         XCTAssertTrue(detailController.children.first is DiffInspectorViewController)
     }
 
-    @MainActor
-    func testQuitDuringMutationPresentsWaitAndCancelActionsAtRuntime() throws {
-        let directory = try makeTestDirectory()
-        let coordinator = AppCoordinator(
-            stateStore: StateStore(fileURL: directory.appendingPathComponent("state.json"))
-        )
-        let windowController = MainWindowController(coordinator: coordinator)
-        let window = try XCTUnwrap(windowController.window)
-        window.makeKeyAndOrderFront(nil)
-        let appDelegate = AppDelegate()
-        appDelegate.mainWindowController = windowController
-        let activeMutation = Task<Void, Never> { }
-        coordinator.mutationTask = activeMutation
-        defer {
-            activeMutation.cancel()
-            coordinator.mutationTask = nil
-            if let sheet = window.sheets.first { window.endSheet(sheet) }
-            window.orderOut(nil)
-        }
-
-        XCTAssertEqual(appDelegate.applicationShouldTerminate(NSApp), .terminateLater)
-        let sheet = try XCTUnwrap(window.sheets.first)
-        let sheetContentView = try XCTUnwrap(sheet.contentView)
-        sheetContentView.layoutSubtreeIfNeeded()
-        let buttonTitles = allDescendantViews(in: sheetContentView)
-            .compactMap { ($0 as? NSButton)?.title }
-        XCTAssertTrue(buttonTitles.contains("Wait and Quit"))
-        XCTAssertTrue(buttonTitles.contains("Cancel Quit"))
-    }
     @MainActor
     func testCommitComposerUsesSummaryAndDescriptionFields() throws {
         let coordinator = AppCoordinator()

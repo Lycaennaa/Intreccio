@@ -159,8 +159,10 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
         headerStack.spacing = 8
         headerStack.addArrangedSubview(summaryLabel)
         headerStack.addArrangedSubview(worktreeSelectorController.button)
+        headerStack.addArrangedSubview(worktreeSelectorController.bringChangesToMainButton)
         summaryLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         worktreeSelectorController.button.setContentHuggingPriority(.required, for: .horizontal)
+        worktreeSelectorController.bringChangesToMainButton.setContentHuggingPriority(.required, for: .horizontal)
         headerStack.translatesAutoresizingMaskIntoConstraints = false
         return headerStack
     }
@@ -220,6 +222,10 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
         )
         let needsTreeReload = treeCacheKey != treeKey
         guard let status = refresh.status else {
+            worktreeSelectorController.configureTransfer(
+                status: nil,
+                mutationState: snapshot.mutationState
+            )
             let message = switch refresh.phase {
             case .queued: "Waiting to refresh changes"
             case .running: "Loading changes"
@@ -230,6 +236,7 @@ final class ChangesViewController: NSViewController, NSOutlineViewDataSource, NS
             return
         }
 
+        worktreeSelectorController.configureTransfer(status: status, mutationState: snapshot.mutationState)
         let content = refresh.statusContent ?? RepositoryStatusContent(status: status)
         if needsTreeReload {
             roots = makeGroups(status.changes)

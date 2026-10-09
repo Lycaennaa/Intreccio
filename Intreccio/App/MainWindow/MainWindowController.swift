@@ -103,9 +103,17 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     var hasActiveMutation: Bool { coordinator.hasActiveMutation }
 
-    func waitForMutationAndFlushState() async -> Bool {
-        await coordinator.waitForActiveMutation()
-        return await flushState()
+    func closeMutationAdmission() {
+        coordinator.mutationAdmissionClosed = true
+    }
+
+    func reopenMutationAdmission() {
+        coordinator.mutationAdmissionClosed = false
+    }
+
+    func waitForMutation() async -> Bool {
+        let failure = await coordinator.waitForActiveMutation()
+        return failure == nil
     }
 
     func windowDidMove(_ notification: Notification) {

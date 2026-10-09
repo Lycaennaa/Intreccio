@@ -19,6 +19,48 @@ nonisolated enum ProcessPriority: Sendable {
     case selectedRepository
     case normal
 }
+nonisolated enum ProcessCancellationBehavior: Sendable {
+    case cancellable
+    case finishAfterLaunch
+}
+nonisolated enum ProcessOutputLimitBehavior: Sendable, Equatable {
+    case terminate
+    case discardExcess
+}
+
+nonisolated struct ProcessExecutionRequest: Sendable {
+    let repository: URL?
+    let arguments: [String]
+    let input: Data?
+    let environment: [String: String]
+    let acceptedExitCodes: Set<Int32>
+    let outputLimit: Int
+    let priority: ProcessPriority
+    let cancellationBehavior: ProcessCancellationBehavior
+    let outputLimitBehavior: ProcessOutputLimitBehavior
+
+    init(
+        repository: URL?,
+        arguments: [String],
+        input: Data?,
+        environment: [String: String],
+        acceptedExitCodes: Set<Int32>,
+        outputLimit: Int,
+        priority: ProcessPriority,
+        cancellationBehavior: ProcessCancellationBehavior = .cancellable,
+        outputLimitBehavior: ProcessOutputLimitBehavior = .terminate
+    ) {
+        self.repository = repository
+        self.arguments = arguments
+        self.input = input
+        self.environment = environment
+        self.acceptedExitCodes = acceptedExitCodes
+        self.outputLimit = outputLimit
+        self.priority = priority
+        self.cancellationBehavior = cancellationBehavior
+        self.outputLimitBehavior = outputLimitBehavior
+    }
+}
 
 nonisolated protocol ProcessRunning: Sendable {
     func execute(
@@ -31,6 +73,7 @@ nonisolated protocol ProcessRunning: Sendable {
         timeout: Duration,
         priority: ProcessPriority
     ) async throws -> ProcessCommandResult
+    func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult
     func executeStreaming(
         repository: URL?,
         arguments: [String],
@@ -167,18 +210,24 @@ actor ProcessRunner: ProcessRunning {
         timeout: Duration,
         priority: ProcessPriority
     ) async throws -> ProcessCommandResult {
-        try await execute(
+        let request = ProcessExecutionRequest(
             repository: repository,
             arguments: arguments,
             input: input,
             environment: environment,
             acceptedExitCodes: acceptedExitCodes,
             outputLimit: outputLimit,
+            priority: priority
+        )
+        return try await execute(
+            request: request,
             timeout: timeout,
-            priority: priority,
             outputHandler: nil,
             control: nil
         )
+    }
+    func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult {
+        try await execute(request: request, timeout: nil, outputHandler: nil, control: nil)
     }
 
     func executeStreaming(
@@ -193,33 +242,30 @@ actor ProcessRunner: ProcessRunning {
         progress: @escaping @Sendable (ProcessOutputStream, Data) -> Void,
         control: ProcessControl?
     ) async throws -> ProcessCommandResult {
-        try await execute(
+        let request = ProcessExecutionRequest(
             repository: repository,
             arguments: arguments,
             input: input,
             environment: environment,
             acceptedExitCodes: acceptedExitCodes,
             outputLimit: outputLimit,
+            priority: priority
+        )
+        return try await execute(
+            request: request,
             timeout: timeout,
-            priority: priority,
             outputHandler: progress,
             control: control
         )
     }
 
     private func execute(
-        repository: URL?,
-        arguments: [String],
-        input: Data?,
-        environment: [String: String],
-        acceptedExitCodes: Set<Int32>,
-        outputLimit: Int,
-        timeout: Duration,
-        priority: ProcessPriority,
+        request: ProcessExecutionRequest,
+        timeout: Duration?,
         outputHandler: (@Sendable (ProcessOutputStream, Data) -> Void)?,
         control: ProcessControl?
     ) async throws -> ProcessCommandResult {
-        try await limiter.acquire(priority: priority)
+        try await limiter.acquire(priority: request.priority)
         do {
             try Task.checkCancellation()
         } catch {
@@ -228,18 +274,25 @@ actor ProcessRunner: ProcessRunning {
         }
         let invocation = ProcessInvocation(
             executable: executable,
-            repository: repository,
-            arguments: arguments,
-            input: input,
-            environment: environment,
-            acceptedExitCodes: acceptedExitCodes,
-            outputLimit: outputLimit,
+            repository: request.repository,
+            arguments: request.arguments,
+            input: request.input,
+            environment: request.environment,
+            acceptedExitCodes: request.acceptedExitCodes,
+            outputLimit: request.outputLimit,
+            outputLimitBehavior: request.outputLimitBehavior,
             timeout: timeout,
             outputHandler: outputHandler,
             control: control
         )
         do {
-            let result = try await invocation.start()
+            let result: ProcessCommandResult
+            switch request.cancellationBehavior {
+            case .cancellable:
+                result = try await invocation.start()
+            case .finishAfterLaunch:
+                result = try await invocation.startFinishingAfterLaunch()
+            }
             await limiter.release()
             return result
         } catch {
@@ -275,6 +328,9 @@ actor GitProcessRunner: ProcessRunning {
             timeout: timeout,
             priority: priority
         )
+    }
+    func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult {
+        try await runner.executeWithoutTimeout(request)
     }
 
     func executeStreaming(
