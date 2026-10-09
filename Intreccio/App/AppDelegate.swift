@@ -98,14 +98,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 terminationAttempt = .idle
                 return .terminateCancel
             }
+            let replyToApplication = terminationReplyHandler
             alert.beginSheetModal(for: window) { [weak self] response in
                 guard response == .alertFirstButtonReturn else {
                     self?.cancelTerminationPrompt()
-                    reply(to: sender, shouldTerminate: false)
+                    replyToApplication(sender, false)
                     return
                 }
                 guard let self else {
-                    reply(to: sender, shouldTerminate: false)
+                    replyToApplication(sender, false)
                     return
                 }
                 guard case .prompting = self.terminationAttempt else { return }
@@ -139,9 +140,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let requestID = UUID()
         terminationAttempt = .waiting(requestID: requestID, sender: sender)
         terminationTimeoutTask?.cancel()
+        let timeout = mutationWaitTimeout
         terminationTimeoutTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: mutationWaitTimeout)
+                try await Task.sleep(for: timeout)
             } catch {
                 return
             }
