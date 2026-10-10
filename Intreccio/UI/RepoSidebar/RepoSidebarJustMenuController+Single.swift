@@ -7,17 +7,20 @@ final class RepoSidebarJustMenuSingleImplementation: NSObject {
         let recipeName: String
         let justfile: JustfileDefinition
         let context: RepoSidebarMenuContext
+        let runMode: TerminalLauncher.RunMode
 
         init(
             repositoryID: UUID,
             recipeName: String,
             justfile: JustfileDefinition,
-            context: RepoSidebarMenuContext
+            context: RepoSidebarMenuContext,
+            runMode: TerminalLauncher.RunMode
         ) {
             self.repositoryID = repositoryID
             self.recipeName = recipeName
             self.justfile = justfile
             self.context = context
+            self.runMode = runMode
         }
     }
     final class CreateTarget: NSObject {
@@ -166,18 +169,25 @@ final class RepoSidebarJustMenuSingleImplementation: NSObject {
             return
         }
         for recipe in justfile.recipes {
-            let item = NSMenuItem(
-                title: recipe.name,
-                action: #selector(runRecipe(_:)),
-                keyEquivalent: ""
-            )
-            item.target = menuTarget
-            item.representedObject = RecipeTarget(
-                repositoryID: repositoryID,
-                recipeName: recipe.name,
-                justfile: justfile,
-                context: context
-            )
+            let item = NSMenuItem(title: recipe.name, action: nil, keyEquivalent: "")
+            let recipeMenu = NSMenu(title: recipe.name)
+            for runMode in TerminalLauncher.RunMode.allCases {
+                let runItem = NSMenuItem(
+                    title: runMode.menuTitle,
+                    action: #selector(runRecipe(_:)),
+                    keyEquivalent: ""
+                )
+                runItem.target = menuTarget
+                runItem.representedObject = RecipeTarget(
+                    repositoryID: repositoryID,
+                    recipeName: recipe.name,
+                    justfile: justfile,
+                    context: context,
+                    runMode: runMode
+                )
+                recipeMenu.addItem(runItem)
+            }
+            item.submenu = recipeMenu
             submenu.addItem(item)
         }
     }
@@ -256,7 +266,8 @@ final class RepoSidebarJustMenuSingleImplementation: NSObject {
                 repositoryID: target.repositoryID,
                 recipeName: target.recipeName,
                 justfile: target.justfile,
-                context: target.context
+                context: target.context,
+                runMode: target.runMode
             ),
                   !Task.isCancelled,
                   self.isCurrentContext(target.context, repositoryID: target.repositoryID) else { return }
@@ -268,7 +279,8 @@ final class RepoSidebarJustMenuSingleImplementation: NSObject {
         repositoryID: UUID,
         recipeName: String,
         justfile: JustfileDefinition,
-        context: RepoSidebarMenuContext
+        context: RepoSidebarMenuContext,
+        runMode: TerminalLauncher.RunMode
     ) async -> String? {
         guard let repository = coordinator.repositories.first(where: { $0.id == repositoryID }),
               repository.availability == .available,
@@ -294,7 +306,8 @@ final class RepoSidebarJustMenuSingleImplementation: NSObject {
                 ),
                 repositoryURL: currentRepository.canonicalURL,
                 repositoryID: currentRepository.id,
-                recipeName: recipeName
+                recipeName: recipeName,
+                runMode: runMode
             )
             return nil
         } catch {

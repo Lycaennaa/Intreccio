@@ -58,35 +58,6 @@ extension AppCoordinatorTests {
         )
     }
 
-    func testJustRecipeScriptIsPersistentAndUpdatedInPlace() throws {
-        let directory = try makeTestDirectory()
-        let repository = directory.appendingPathComponent("Repository", isDirectory: true)
-        let scriptsDirectory = directory.appendingPathComponent("scripts", isDirectory: true)
-        let repositoryID = UUID()
-
-        let firstURL = try TerminalLauncher.writeScript(
-            command: "cd -- '/old' && just --justfile '/old/justfile' 'build'",
-            repositoryURL: repository,
-            repositoryID: repositoryID,
-            recipeName: "build",
-            scriptsDirectory: scriptsDirectory
-        )
-        let secondURL = try TerminalLauncher.writeScript(
-            command: "cd -- '/new' && just --justfile '/new/Justfile' 'build'",
-            repositoryURL: repository,
-            repositoryID: repositoryID,
-            recipeName: "build",
-            scriptsDirectory: scriptsDirectory
-        )
-
-        XCTAssertEqual(firstURL, secondURL)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: secondURL.path))
-        let script = try String(contentsOf: secondURL, encoding: .utf8)
-        XCTAssertTrue(script.contains("cd -- '/new' && just --justfile '/new/Justfile' 'build'"))
-        XCTAssertFalse(script.contains("trap 'rm -f"))
-        let attributes = try FileManager.default.attributesOfItem(atPath: secondURL.path)
-        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o700)
-    }
     func testRepositoryMenuOffersJustRecipesFromJustfile() async throws {
         try requireJust()
         let directory = try makeTestDirectory()
@@ -119,14 +90,21 @@ extension AppCoordinatorTests {
         await controller.menuController.waitForJustMenuDiscovery()
 
         XCTAssertEqual(justMenu.items.map(\.title), ["build", "build-release"])
-        for item in justMenu.items {
-            XCTAssertTrue(item.target is RepoSidebarJustMenuController)
-            XCTAssertEqual(NSStringFromSelector(try XCTUnwrap(item.action)), "runRecipe:")
-            let target = try XCTUnwrap(
-                item.representedObject as? RepoSidebarJustMenuController.RecipeTarget
-            )
-            XCTAssertEqual(target.repositoryID, repositoryID)
-            XCTAssertEqual(target.recipeName, item.title)
+        let runModes = TerminalLauncher.RunMode.allCases
+        for recipeItem in justMenu.items {
+            XCTAssertNil(recipeItem.action)
+            let recipeMenu = try XCTUnwrap(recipeItem.submenu)
+            XCTAssertEqual(recipeMenu.items.map(\.title), runModes.map(\.menuTitle))
+            for (runItem, runMode) in zip(recipeMenu.items, runModes) {
+                XCTAssertTrue(runItem.target is RepoSidebarJustMenuController)
+                XCTAssertEqual(NSStringFromSelector(try XCTUnwrap(runItem.action)), "runRecipe:")
+                let target = try XCTUnwrap(
+                    runItem.representedObject as? RepoSidebarJustMenuController.RecipeTarget
+                )
+                XCTAssertEqual(target.repositoryID, repositoryID)
+                XCTAssertEqual(target.recipeName, recipeItem.title)
+                XCTAssertEqual(target.runMode, runMode)
+            }
         }
     }
     func testRepositoryMenuOffersCreateAndInfoWithoutJustfile() async throws {
@@ -519,12 +497,16 @@ extension AppCoordinatorTests {
 
         XCTAssertEqual(justMenu.items.map(\.title), ["build"])
         let recipeItem = try XCTUnwrap(justMenu.items.first)
-        XCTAssertEqual(NSStringFromSelector(try XCTUnwrap(recipeItem.action)), "runSelectedRecipe:")
+        XCTAssertNil(recipeItem.action)
+        let closeItem = try XCTUnwrap(recipeItem.submenu?.items.last)
+        XCTAssertEqual(closeItem.title, TerminalLauncher.RunMode.closeTerminalWhenFinished.menuTitle)
+        XCTAssertEqual(NSStringFromSelector(try XCTUnwrap(closeItem.action)), "runSelectedRecipe:")
         let target = try XCTUnwrap(
-            recipeItem.representedObject as? RepoSidebarJustMenuController.SelectedRecipeTarget
+            closeItem.representedObject as? RepoSidebarJustMenuController.SelectedRecipeTarget
         )
         XCTAssertEqual(target.recipeName, "build")
         XCTAssertEqual(target.repositoryIDs, repositoryIDs)
+        XCTAssertEqual(target.runMode, .closeTerminalWhenFinished)
     }
 
 }

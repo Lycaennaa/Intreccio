@@ -168,6 +168,7 @@ final class RepoSidebarJustMenuImplementation: NSObject {
         let recipeName: String
         let repositories: [RepositoryRecipe]
         let context: RepoSidebarMenuContext
+        let runMode: TerminalLauncher.RunMode
 
         var repositoryIDs: [UUID] {
             context.repositoryIDs
@@ -176,11 +177,13 @@ final class RepoSidebarJustMenuImplementation: NSObject {
         init(
             recipeName: String,
             repositories: [RepositoryRecipe],
-            context: RepoSidebarMenuContext
+            context: RepoSidebarMenuContext,
+            runMode: TerminalLauncher.RunMode
         ) {
             self.recipeName = recipeName
             self.repositories = repositories
             self.context = context
+            self.runMode = runMode
         }
     }
     func addMenuItems(
@@ -230,6 +233,33 @@ final class RepoSidebarJustMenuImplementation: NSObject {
         }
     }
 
+    private func addCommonRecipeItem(
+        named recipeName: String,
+        repositories: [SelectedRecipeTarget.RepositoryRecipe],
+        to justMenu: NSMenu,
+        context: RepoSidebarMenuContext,
+        owner: RepoSidebarJustMenuController
+    ) {
+        let item = NSMenuItem(title: recipeName, action: nil, keyEquivalent: "")
+        let recipeMenu = NSMenu(title: recipeName)
+        for runMode in TerminalLauncher.RunMode.allCases {
+            let runItem = NSMenuItem(
+                title: runMode.menuTitle,
+                action: #selector(runSelectedRecipe(_:)),
+                keyEquivalent: ""
+            )
+            runItem.target = owner
+            runItem.representedObject = SelectedRecipeTarget(
+                recipeName: recipeName,
+                repositories: repositories,
+                context: context,
+                runMode: runMode
+            )
+            recipeMenu.addItem(runItem)
+        }
+        item.submenu = recipeMenu
+        justMenu.addItem(item)
+    }
     private func populateJustMenu(
         _ justMenu: NSMenu,
         repositories: [RepoDescriptor],
@@ -269,18 +299,13 @@ final class RepoSidebarJustMenuImplementation: NSObject {
                 )
             }
             for recipe in commonRecipes {
-                let item = NSMenuItem(
-                    title: recipe.name,
-                    action: #selector(runSelectedRecipe(_:)),
-                    keyEquivalent: ""
-                )
-                item.target = owner
-                item.representedObject = SelectedRecipeTarget(
-                    recipeName: recipe.name,
+                addCommonRecipeItem(
+                    named: recipe.name,
                     repositories: selectedRepositories,
-                    context: context
+                    to: justMenu,
+                    context: context,
+                    owner: owner
                 )
-                justMenu.addItem(item)
             }
         } else {
             for entry in repositoryDiscoveries {
@@ -347,7 +372,8 @@ final class RepoSidebarJustMenuImplementation: NSObject {
                     repositoryID: selectedRepository.repositoryID,
                     recipeName: target.recipeName,
                     justfile: selectedRepository.justfile,
-                    context: target.context
+                    context: target.context,
+                    runMode: target.runMode
                 )
                 guard !Task.isCancelled,
                       self.isCurrentContext(target.context, repositoryIDs: target.repositoryIDs) else { return }
