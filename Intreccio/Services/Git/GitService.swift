@@ -159,6 +159,13 @@ actor GitService {
     func githubRepositories() async throws -> [GitHubRepository] {
         try await githubCLI.repositories()
     }
+    func createGitHubRemote(
+        named name: String,
+        options: GitHubRepositoryCreationOptions,
+        for repository: URL
+    ) async throws {
+        try await githubCLI.createRepository(named: name, options: options, from: repository)
+    }
 
     func repositoryRoot(at directory: URL) async throws -> URL {
         let result = try await runner.run(

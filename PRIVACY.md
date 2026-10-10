@@ -8,9 +8,9 @@ The app source contains no analytics SDK or telemetry endpoint. No account is re
 
 ## Purpose and use
 
-Local repository data supports discovery, status, diff, and history views. Git remote checks and cloning use the Git executable installed on the Mac. Opening a GitHub remote launches the browser. When requested, `gh` lists repositories available to the authenticated account.
+Local repository data supports discovery, status, diff, and history views. Git remote checks and cloning use the Git executable installed on the Mac. Opening a GitHub remote launches the browser. When requested, `gh` lists repositories available to the authenticated account or creates a GitHub repository with the selected visibility.
 
-Refreshing or pushing an upstream can contact its configured remote. HTTPS GitHub Git operations can use `gh auth git-credential` through a per-process Git configuration; Intreccio does not modify global Git configuration. SSH remotes continue to use the user's configured SSH authentication. Repository browsing requires `gh auth login`; cloning can also use existing Git credentials.
+Creating a GitHub remote sends the repository name and optional description to GitHub, then configures it as `origin`. Public visibility makes the repository and its metadata visible to everyone. The command does not push local files. HTTPS GitHub Git operations can use `gh auth git-credential` through a per-process Git configuration; Intreccio does not modify global Git configuration. SSH remotes continue to use the user's configured SSH authentication. Repository browsing and remote creation require `gh auth login`; cloning can also use existing Git credentials.
 
 ## Storage and retention
 

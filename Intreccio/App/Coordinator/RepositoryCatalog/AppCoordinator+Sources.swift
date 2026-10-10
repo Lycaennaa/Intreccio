@@ -36,23 +36,65 @@ extension AppCoordinator {
         }
     }
     @discardableResult
-    func createLocalRepository(named name: String, in parentDirectory: URL) async -> Bool {
+    func createLocalRepository(
+        named name: String,
+        in parentDirectory: URL,
+        githubOptions: GitHubRepositoryCreationOptions? = nil
+    ) async -> Bool {
         do {
             let outcome = try await catalog.createLocalRepository(named: name, in: parentDirectory)
+            var createdRepositoryURL: URL?
             switch outcome {
             case .selectedRepository(let repositoryID):
                 selectRepository(repositoryID)
+                createdRepositoryURL = repositories.first(where: { $0.id == repositoryID })?.canonicalURL
             case .createdRepository(let repositoryURL):
                 selectRepository(at: repositoryURL)
+                createdRepositoryURL = repositoryURL
             case .changed, .noChange:
                 break
             }
+            guard await createGitHubRemoteIfRequested(
+                githubOptions,
+                repositoryURL: createdRepositoryURL
+            ) else { return false }
             return true
         } catch is CancellationError {
             return false
         } catch {
             guard !isShuttingDown, !Task.isCancelled else { return false }
             errorMessage = "Could not create repository: \(error)"
+            publish()
+            return false
+        }
+    }
+    private func createGitHubRemoteIfRequested(
+        _ options: GitHubRepositoryCreationOptions?,
+        repositoryURL: URL?
+    ) async -> Bool {
+        guard let options else { return true }
+        guard let repositoryURL else {
+            guard !isShuttingDown, !Task.isCancelled else { return false }
+            errorMessage =
+                "The local repository was created, but its location could not be resolved for "
+                    + "GitHub remote creation."
+            publish()
+            return false
+        }
+        do {
+            try await catalog.createGitHubRemote(
+                named: repositoryURL.lastPathComponent,
+                options: options,
+                for: repositoryURL
+            )
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            guard !isShuttingDown, !Task.isCancelled else { return false }
+            errorMessage =
+                "The local repository was created, but its GitHub remote could not be created: "
+                    + String(describing: error)
             publish()
             return false
         }

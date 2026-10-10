@@ -54,6 +54,93 @@ final class GitHubCLITests: XCTestCase {
         ])
     }
 
+    func testCreatesPublicRepositoryWithDescriptionAndAddsOrigin() async throws {
+        let sourceDirectory = URL(fileURLWithPath: "Local Repository", isDirectory: true)
+        let options = GitHubRepositoryCreationOptions(
+            visibility: .publicRepository,
+            description: "A useful description"
+        )
+        let runner = RecordingGitRunner(responses: [
+            .result(recordedGitResult()),
+            .result(recordedGitResult())
+        ])
+
+        try await GitHubCLI(executableURL: nil, runner: runner).createRepository(
+            named: "NewRepo",
+            options: options,
+            from: sourceDirectory
+        )
+
+        let invocations = await runner.invocations
+        XCTAssertEqual(invocations.map(\.arguments), [
+            ["auth", "status", "--hostname", "github.com"],
+            [
+                "repo",
+                "create",
+                "--public",
+                "--source",
+                sourceDirectory.path,
+                "--remote",
+                "origin",
+                "--description",
+                "A useful description",
+                "--",
+                "NewRepo"
+            ]
+        ])
+    }
+
+    func testCreatesPrivateRepositoryWithoutBlankDescription() async throws {
+        let sourceDirectory = URL(fileURLWithPath: "Local Repository", isDirectory: true)
+        let options = GitHubRepositoryCreationOptions(
+            visibility: .privateRepository,
+            description: "  \n"
+        )
+        let runner = RecordingGitRunner(responses: [
+            .result(recordedGitResult()),
+            .result(recordedGitResult())
+        ])
+
+        try await GitHubCLI(executableURL: nil, runner: runner).createRepository(
+            named: "NewRepo",
+            options: options,
+            from: sourceDirectory
+        )
+
+        let invocations = await runner.invocations
+        XCTAssertEqual(invocations.last?.arguments, [
+            "repo",
+            "create",
+            "--private",
+            "--source",
+            sourceDirectory.path,
+            "--remote",
+            "origin",
+            "--",
+            "NewRepo"
+        ])
+    }
+
+    func testCreateRepositoryRequiresGitHubAuthentication() async {
+        let runner = RecordingGitRunner(responses: [
+            .result(recordedGitResult(error: "not logged in", exitCode: 1))
+        ])
+
+        do {
+            try await GitHubCLI(executableURL: nil, runner: runner).createRepository(
+                named: "NewRepo",
+                options: GitHubRepositoryCreationOptions(visibility: .privateRepository, description: nil),
+                from: URL(fileURLWithPath: "/Repos/NewRepo", isDirectory: true)
+            )
+            XCTFail("Expected an unauthenticated result")
+        } catch {
+            XCTAssertEqual(error as? GitHubCLIError, .notAuthenticated)
+        }
+
+        let invocations = await runner.invocations
+        XCTAssertEqual(invocations.count, 1)
+    }
+
     func testUnauthenticatedCLIDoesNotRequestRepositoryList() async {
         let runner = RecordingGitRunner(responses: [
             .result(recordedGitResult(error: "not logged in", exitCode: 1))
@@ -105,4 +192,5 @@ final class GitHubCLITests: XCTestCase {
             count: GitHubRepositorySelectionPolicy.maximumSelectionCount + 1
         ))
     }
+
 }

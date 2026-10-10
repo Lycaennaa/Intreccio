@@ -181,11 +181,18 @@ final class RepositorySourcesSettingsViewController: NSViewController, SettingsS
     }
     @objc private func createLocalRepository(_ sender: Any?) {
         guard let window = view.window else { return }
-        LocalRepositoryCreationPanel.present(on: window) { [weak self] name, parentDirectory in
-            guard let self else { return }
-            self.runOperation { [coordinator] in
-                _ = await coordinator.createLocalRepository(named: name, in: parentDirectory)
+        LocalRepositoryCreationPanel.present(
+            on: window,
+            onCreate: { [weak self] name, parentDirectory, githubOptions in
+                guard let self else { return }
+                self.runOperation { [coordinator] in
+                    _ = await coordinator.createLocalRepository(
+                        named: name,
+                        in: parentDirectory,
+                        githubOptions: githubOptions
+                    )
+                }
             }
-        }
+        )
     }
 }

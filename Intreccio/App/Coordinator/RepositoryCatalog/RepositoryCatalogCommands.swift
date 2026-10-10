@@ -524,6 +524,16 @@ final class RepositoryCatalog {
             return try await commitCreatedRepository(receipt: receipt, state: state)
         }
     }
+    func createGitHubRemote(
+        named name: String,
+        options: GitHubRepositoryCreationOptions,
+        for repositoryURL: URL
+    ) async throws {
+        try await executeCommand { [weak self] in
+            guard let self else { throw CancellationError() }
+            try await gitService.createGitHubRemote(named: name, options: options, for: repositoryURL)
+        }
+    }
 
     func cloneRepository(
         from sourceURL: URL,

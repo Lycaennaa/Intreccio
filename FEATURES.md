@@ -1,11 +1,12 @@
 # Features
 
-This list covers features in the current app. Intreccio uses the Git installation on your Mac. Optional GitHub CLI (`gh`) support enables authenticated repository browsing and private cloning; supported GitHub remotes also open in a browser.
+This list covers features in the current app. Intreccio uses the Git installation on your Mac. Optional GitHub CLI (`gh`) support enables authenticated repository browsing, private cloning, and private remote creation; supported GitHub remotes also open in a browser.
 
 ## Repositories
 - Add watched folders and discover repositories inside them.
 - Add standalone repositories, create local repositories, exclude repositories from watched folders, and pin repositories.
 - Clone public or private GitHub repositories, paste URLs or browse repositories available to your `gh` account. Private repository browsing requires `gh auth login`; cloning can also use an existing Git credential helper. Submodules initialize automatically and Git LFS must be installed separately.
+- Create a local repository with an optional GitHub remote. Choose private (default) or public visibility and optionally add a GitHub description; creating the remote requires `gh auth login`.
 - Open repositories with supported GitHub remotes in a browser.
 
 ## Changes and diffs

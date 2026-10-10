@@ -13,6 +13,23 @@ nonisolated struct GitHubRepository: Codable, Equatable, Identifiable, Sendable 
     }
 }
 
+nonisolated enum GitHubRepositoryVisibility: Sendable {
+    case privateRepository
+    case publicRepository
+
+    var commandLineFlag: String {
+        switch self {
+        case .privateRepository: "--private"
+        case .publicRepository: "--public"
+        }
+    }
+}
+
+nonisolated struct GitHubRepositoryCreationOptions: Sendable {
+    let visibility: GitHubRepositoryVisibility
+    let description: String?
+}
+
 nonisolated enum GitHubCLIError: Error, Equatable, CustomStringConvertible {
     case notInstalled
     case notAuthenticated
@@ -143,6 +160,31 @@ nonisolated struct GitHubCLI: Sendable {
         } catch {
             throw GitHubCLIError.invalidRepositoryResponse
         }
+    }
+
+    func createRepository(
+        named name: String,
+        options: GitHubRepositoryCreationOptions,
+        from sourceDirectory: URL
+    ) async throws {
+        guard try await isAuthenticated() else { throw GitHubCLIError.notAuthenticated }
+        var arguments = [
+            "repo",
+            "create",
+            options.visibility.commandLineFlag,
+            "--source",
+            sourceDirectory.path,
+            "--remote",
+            "origin"
+        ]
+        if let description = options.description {
+            let normalizedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalizedDescription.isEmpty {
+                arguments += ["--description", normalizedDescription]
+            }
+        }
+        arguments += ["--", name]
+        _ = try await run(arguments)
     }
 
     private func run(

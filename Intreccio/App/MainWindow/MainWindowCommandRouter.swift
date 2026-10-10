@@ -141,12 +141,19 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
     }
     @objc func createLocalRepository(_ sender: Any?) {
         guard !isTerminating, directoryOperationTask == nil, let window else { return }
-        LocalRepositoryCreationPanel.present(on: window) { [weak self] name, parentDirectory in
-            guard let self, !self.isTerminating else { return }
-            self.startDirectoryOperation { [coordinator] in
-                _ = await coordinator.createLocalRepository(named: name, in: parentDirectory)
+        LocalRepositoryCreationPanel.present(
+            on: window,
+            onCreate: { [weak self] name, parentDirectory, githubOptions in
+                guard let self, !self.isTerminating else { return }
+                self.startDirectoryOperation { [coordinator] in
+                    _ = await coordinator.createLocalRepository(
+                        named: name,
+                        in: parentDirectory,
+                        githubOptions: githubOptions
+                    )
+                }
             }
-        }
+        )
     }
 
     @objc func rescan(_ sender: Any?) { coordinator.rescanAll() }
