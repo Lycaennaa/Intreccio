@@ -81,4 +81,25 @@ final class RepoSidebarJustMenuController: NSObject {
     @objc func showJustInfoForSelection(_ sender: NSMenuItem) {
         implementation.showJustInfoForSelection(sender)
     }
+
+    static func addTerminalRunModeItems(
+        to recipeMenu: NSMenu,
+        owner: AnyObject,
+        action: Selector,
+        makeTarget: (TerminalChoice, TerminalLauncher.RunMode) -> NSObject
+    ) {
+        for terminal in TerminalChoice.allCases {
+            let terminalItem = NSMenuItem(title: terminal.menuTitle, action: nil, keyEquivalent: "")
+            let terminalMenu = NSMenu(title: terminal.menuTitle)
+            for runMode in TerminalLauncher.RunMode.allCases {
+                let runItem = NSMenuItem(title: runMode.menuTitle, action: action, keyEquivalent: "")
+                runItem.target = owner
+                runItem.representedObject = makeTarget(terminal, runMode)
+                terminalMenu.addItem(runItem)
+            }
+            terminalItem.submenu = terminalMenu
+            recipeMenu.addItem(terminalItem)
+        }
+    }
+
 }

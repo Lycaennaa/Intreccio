@@ -141,8 +141,8 @@ extension AppCoordinatorTests {
         let aiToolSubmenu = try XCTUnwrap(menu.items.first(where: { $0.title == "Open in AI Tool" })?.submenu)
         let ompMenu = try XCTUnwrap(aiToolSubmenu.items.first(where: { $0.title == "OMP" }))
         let ompItems = try XCTUnwrap(ompMenu.submenu).items
-        XCTAssertEqual(ompItems.map(\.title), ["Apple Terminal", "Tern"])
-        for (item, terminal) in zip(ompItems, OMPLauncher.Terminal.allCases) {
+        XCTAssertEqual(ompItems.map(\.title), TerminalChoice.allCases.map(\.menuTitle))
+        for (item, terminal) in zip(ompItems, TerminalChoice.allCases) {
             let target = try XCTUnwrap(item.representedObject as? RepoSidebarAIController.OpenTarget)
             XCTAssertEqual(target.destination, .omp(terminal))
             XCTAssertEqual(target.repositoryIDs, [repositoryID])

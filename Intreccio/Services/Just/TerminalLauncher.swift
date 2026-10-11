@@ -10,15 +10,16 @@ enum TerminalLauncher {
 
         var menuTitle: String {
             switch self {
-            case .normal: "Run normally"
-            case .closeTerminalWhenFinished: "Run and close Terminal when finished"
+            case .normal: "Leave Open"
+            case .closeTerminalWhenFinished: "Close When Done"
             }
         }
 
-        var completionScript: String {
-            switch self {
+        func completionScript(for terminal: TerminalChoice) -> String {
+            guard terminal == .appleTerminal else { return "" }
+            return switch self {
             case .normal:
-                ""
+                "exec /bin/zsh -l"
             case .closeTerminalWhenFinished:
                 """
                 /usr/bin/osascript - "$(/usr/bin/tty)" <<'APPLESCRIPT'
@@ -41,16 +42,15 @@ enum TerminalLauncher {
             }
         }
     }
+
     enum LaunchError: LocalizedError {
-        case unavailable
+        case applicationNotInstalled(String)
         case failed(String)
 
         var errorDescription: String? {
             switch self {
-            case .unavailable:
-                return "No application could open the just recipe script."
-            case .failed(let message):
-                return message
+            case .applicationNotInstalled(let applicationName): "\(applicationName) is not installed."
+            case .failed(let message): message
             }
         }
     }
@@ -60,8 +60,13 @@ enum TerminalLauncher {
         repositoryURL: URL,
         repositoryID: UUID,
         recipeName: String,
-        runMode: RunMode = .normal
+        terminal: TerminalChoice,
+        runMode: RunMode,
+        onError: @escaping @MainActor (String) -> Void
     ) throws {
+        guard let application = terminal.installedApplication else {
+            throw LaunchError.applicationNotInstalled(terminal.menuTitle)
+        }
         let scriptURL: URL
         do {
             scriptURL = try writeScript(
@@ -69,15 +74,36 @@ enum TerminalLauncher {
                 repositoryURL: repositoryURL,
                 repositoryID: repositoryID,
                 recipeName: recipeName,
+                terminal: terminal,
                 runMode: runMode
             )
         } catch {
             throw LaunchError.failed(error.localizedDescription)
         }
 
-        guard LaunchServicesApplicationService.shared.open(scriptURL) else {
-            throw LaunchError.unavailable
+        switch terminal {
+        case .appleTerminal:
+            LaunchServicesApplicationService.shared.open(
+                [scriptURL],
+                withApplicationAt: application.url,
+                onError: onError
+            )
+        case .tern:
+            let process = Process()
+            process.executableURL = application.executableURL
+            process.arguments = ternArguments(for: scriptURL, runMode: runMode)
+            process.currentDirectoryURL = repositoryURL
+            do {
+                try process.run()
+            } catch {
+                throw LaunchError.failed(error.localizedDescription)
+            }
         }
+    }
+
+    static func ternArguments(for scriptURL: URL, runMode: RunMode) -> [String] {
+        let command = runMode == .normal ? "\"$1\"; exec /bin/zsh -l" : "\"$1\""
+        return ["-e", "/bin/zsh", "-l", "-c", command, "intreccio-just", scriptURL.path]
     }
 
     static func writeScript(
@@ -85,7 +111,8 @@ enum TerminalLauncher {
         repositoryURL: URL,
         repositoryID: UUID,
         recipeName: String,
-        runMode: RunMode = .normal,
+        terminal: TerminalChoice,
+        runMode: RunMode,
         scriptsDirectory: URL? = nil
     ) throws -> URL {
         let fileManager = FileManager.default
@@ -105,6 +132,7 @@ enum TerminalLauncher {
                 repositoryName: repositoryURL.lastPathComponent,
                 repositoryID: repositoryID,
                 recipeName: recipeName,
+                terminal: terminal,
                 runMode: runMode
             )
         )
@@ -117,7 +145,7 @@ enum TerminalLauncher {
             \(command)
             recipe_exit_code=$?
         fi
-        \(runMode.completionScript)
+        \(runMode.completionScript(for: terminal))
         exit "$recipe_exit_code"
         """
         let existingScript = try? String(contentsOf: scriptURL, encoding: .utf8)
@@ -143,9 +171,10 @@ enum TerminalLauncher {
         repositoryName: String,
         repositoryID: UUID,
         recipeName: String,
+        terminal: TerminalChoice,
         runMode: RunMode
     ) -> String {
-        let identity = Data("\(repositoryID.uuidString)\u{0}\(recipeName)\u{0}\(runMode.rawValue)".utf8)
+        let identity = Data("\(repositoryID.uuidString)\u{0}\(recipeName)\u{0}\(terminal.rawValue)\u{0}\(runMode.rawValue)".utf8)
         let digest = SHA256.hash(data: identity)
             .prefix(6)
             .map { String(format: "%02x", $0) }

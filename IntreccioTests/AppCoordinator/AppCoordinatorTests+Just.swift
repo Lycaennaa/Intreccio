@@ -90,20 +90,25 @@ extension AppCoordinatorTests {
         await controller.menuController.waitForJustMenuDiscovery()
 
         XCTAssertEqual(justMenu.items.map(\.title), ["build", "build-release"])
+        let terminals = TerminalChoice.allCases
         let runModes = TerminalLauncher.RunMode.allCases
         for recipeItem in justMenu.items {
-            XCTAssertNil(recipeItem.action)
             let recipeMenu = try XCTUnwrap(recipeItem.submenu)
-            XCTAssertEqual(recipeMenu.items.map(\.title), runModes.map(\.menuTitle))
-            for (runItem, runMode) in zip(recipeMenu.items, runModes) {
-                XCTAssertTrue(runItem.target is RepoSidebarJustMenuController)
-                XCTAssertEqual(NSStringFromSelector(try XCTUnwrap(runItem.action)), "runRecipe:")
-                let target = try XCTUnwrap(
-                    runItem.representedObject as? RepoSidebarJustMenuController.RecipeTarget
-                )
-                XCTAssertEqual(target.repositoryID, repositoryID)
-                XCTAssertEqual(target.recipeName, recipeItem.title)
-                XCTAssertEqual(target.runMode, runMode)
+            XCTAssertEqual(recipeMenu.items.map(\.title), terminals.map(\.menuTitle))
+            for (terminalItem, terminal) in zip(recipeMenu.items, terminals) {
+                let terminalMenu = try XCTUnwrap(terminalItem.submenu)
+                XCTAssertEqual(terminalMenu.items.map(\.title), runModes.map(\.menuTitle))
+                for (runItem, runMode) in zip(terminalMenu.items, runModes) {
+                    XCTAssertTrue(runItem.target is RepoSidebarJustMenuController)
+                    XCTAssertEqual(NSStringFromSelector(try XCTUnwrap(runItem.action)), "runRecipe:")
+                    let target = try XCTUnwrap(
+                        runItem.representedObject as? RepoSidebarJustMenuController.RecipeTarget
+                    )
+                    XCTAssertEqual(target.repositoryID, repositoryID)
+                    XCTAssertEqual(target.recipeName, recipeItem.title)
+                    XCTAssertEqual(target.terminal, terminal)
+                    XCTAssertEqual(target.runMode, runMode)
+                }
             }
         }
     }
@@ -497,16 +502,25 @@ extension AppCoordinatorTests {
 
         XCTAssertEqual(justMenu.items.map(\.title), ["build"])
         let recipeItem = try XCTUnwrap(justMenu.items.first)
-        XCTAssertNil(recipeItem.action)
-        let closeItem = try XCTUnwrap(recipeItem.submenu?.items.last)
-        XCTAssertEqual(closeItem.title, TerminalLauncher.RunMode.closeTerminalWhenFinished.menuTitle)
-        XCTAssertEqual(NSStringFromSelector(try XCTUnwrap(closeItem.action)), "runSelectedRecipe:")
-        let target = try XCTUnwrap(
-            closeItem.representedObject as? RepoSidebarJustMenuController.SelectedRecipeTarget
-        )
-        XCTAssertEqual(target.recipeName, "build")
-        XCTAssertEqual(target.repositoryIDs, repositoryIDs)
-        XCTAssertEqual(target.runMode, .closeTerminalWhenFinished)
+        let recipeMenu = try XCTUnwrap(recipeItem.submenu)
+        let terminals = TerminalChoice.allCases
+        let runModes = TerminalLauncher.RunMode.allCases
+        XCTAssertEqual(recipeMenu.items.map(\.title), terminals.map(\.menuTitle))
+        for (terminalItem, terminal) in zip(recipeMenu.items, terminals) {
+            let terminalMenu = try XCTUnwrap(terminalItem.submenu)
+            XCTAssertEqual(terminalMenu.items.map(\.title), runModes.map(\.menuTitle))
+            for (runItem, runMode) in zip(terminalMenu.items, runModes) {
+                XCTAssertTrue(runItem.target is RepoSidebarJustMenuController)
+                XCTAssertEqual(NSStringFromSelector(try XCTUnwrap(runItem.action)), "runSelectedRecipe:")
+                let target = try XCTUnwrap(
+                    runItem.representedObject as? RepoSidebarJustMenuController.SelectedRecipeTarget
+                )
+                XCTAssertEqual(target.recipeName, "build")
+                XCTAssertEqual(target.repositoryIDs, repositoryIDs)
+                XCTAssertEqual(target.terminal, terminal)
+                XCTAssertEqual(target.runMode, runMode)
+            }
+        }
     }
 
 }

@@ -168,6 +168,7 @@ final class RepoSidebarJustMenuImplementation: NSObject {
         let recipeName: String
         let repositories: [RepositoryRecipe]
         let context: RepoSidebarMenuContext
+        let terminal: TerminalChoice
         let runMode: TerminalLauncher.RunMode
 
         var repositoryIDs: [UUID] {
@@ -178,11 +179,13 @@ final class RepoSidebarJustMenuImplementation: NSObject {
             recipeName: String,
             repositories: [RepositoryRecipe],
             context: RepoSidebarMenuContext,
+            terminal: TerminalChoice,
             runMode: TerminalLauncher.RunMode
         ) {
             self.recipeName = recipeName
             self.repositories = repositories
             self.context = context
+            self.terminal = terminal
             self.runMode = runMode
         }
     }
@@ -242,20 +245,18 @@ final class RepoSidebarJustMenuImplementation: NSObject {
     ) {
         let item = NSMenuItem(title: recipeName, action: nil, keyEquivalent: "")
         let recipeMenu = NSMenu(title: recipeName)
-        for runMode in TerminalLauncher.RunMode.allCases {
-            let runItem = NSMenuItem(
-                title: runMode.menuTitle,
-                action: #selector(runSelectedRecipe(_:)),
-                keyEquivalent: ""
-            )
-            runItem.target = owner
-            runItem.representedObject = SelectedRecipeTarget(
+        RepoSidebarJustMenuController.addTerminalRunModeItems(
+            to: recipeMenu,
+            owner: owner,
+            action: #selector(runSelectedRecipe(_:))
+        ) { terminal, runMode in
+            SelectedRecipeTarget(
                 recipeName: recipeName,
                 repositories: repositories,
                 context: context,
+                terminal: terminal,
                 runMode: runMode
             )
-            recipeMenu.addItem(runItem)
         }
         item.submenu = recipeMenu
         justMenu.addItem(item)
@@ -373,6 +374,7 @@ final class RepoSidebarJustMenuImplementation: NSObject {
                     recipeName: target.recipeName,
                     justfile: selectedRepository.justfile,
                     context: target.context,
+                    terminal: target.terminal,
                     runMode: target.runMode
                 )
                 guard !Task.isCancelled,

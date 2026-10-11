@@ -38,7 +38,7 @@ final class RepoSidebarAIController: NSObject {
 
     enum OpenDestination: Equatable {
         case t3Code(T3CodeInstalledApplication?)
-        case omp(OMPLauncher.Terminal)
+        case omp(TerminalChoice)
 
         var applicationName: String {
             switch self {
@@ -99,7 +99,7 @@ final class RepoSidebarAIController: NSObject {
         let generation = contextGeneration
         let openInAIToolSubmenu = NSMenu()
         let ompSubmenu = NSMenu()
-        for terminal in OMPLauncher.Terminal.allCases {
+        for terminal in TerminalChoice.allCases {
             addMenuItem(
                 terminal.menuTitle,
                 target: OpenTarget(

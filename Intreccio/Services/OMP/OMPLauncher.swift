@@ -3,17 +3,6 @@ import Foundation
 
 @MainActor
 enum OMPLauncher {
-    enum Terminal: String, CaseIterable, Equatable {
-        case terminal
-        case tern
-
-        var menuTitle: String {
-            switch self {
-            case .terminal: "Apple Terminal"
-            case .tern: "Tern"
-            }
-        }
-    }
 
     enum LaunchError: LocalizedError {
         case applicationNotInstalled(String)
@@ -31,17 +20,14 @@ enum OMPLauncher {
         in directoryURL: URL,
         expectedFileSystemID: String,
         repositoryID: UUID,
-        using terminal: Terminal,
+        using terminal: TerminalChoice,
         onError: @escaping @MainActor (String) -> Void
     ) throws {
+        guard let application = terminal.installedApplication else {
+            throw LaunchError.applicationNotInstalled(terminal.menuTitle)
+        }
         switch terminal {
-        case .terminal:
-            guard let applicationURL = applicationURL(
-                bundleIdentifier: "com.apple.Terminal",
-                fallbackPath: "/System/Applications/Utilities/Terminal.app"
-            ) else {
-                throw LaunchError.applicationNotInstalled(terminal.menuTitle)
-            }
+        case .appleTerminal:
             let scriptURL = try writeScript(
                 in: directoryURL,
                 expectedFileSystemID: expectedFileSystemID,
@@ -49,18 +35,12 @@ enum OMPLauncher {
             )
             LaunchServicesApplicationService.shared.open(
                 [scriptURL],
-                withApplicationAt: applicationURL,
+                withApplicationAt: application.url,
                 onError: onError
             )
         case .tern:
-            guard let applicationURL = applicationURL(
-                bundleIdentifier: "so.stencil.tern",
-                fallbackPath: "/Applications/Tern.app"
-            ), let executableURL = Bundle(url: applicationURL)?.executableURL else {
-                throw LaunchError.applicationNotInstalled(terminal.menuTitle)
-            }
             let process = Process()
-            process.executableURL = executableURL
+            process.executableURL = application.executableURL
             process.arguments = ternArguments(in: directoryURL, expectedFileSystemID: expectedFileSystemID)
             process.currentDirectoryURL = directoryURL
             do {
@@ -133,13 +113,4 @@ enum OMPLauncher {
             .appendingPathComponent("OMP", isDirectory: true)
     }
 
-    private static func applicationURL(bundleIdentifier: String, fallbackPath: String) -> URL? {
-        let applicationURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
-            ?? URL(fileURLWithPath: fallbackPath, isDirectory: true)
-        guard let bundle = Bundle(url: applicationURL),
-              bundle.bundleIdentifier == bundleIdentifier,
-              let executableURL = bundle.executableURL,
-              FileManager.default.isExecutableFile(atPath: executableURL.path) else { return nil }
-        return applicationURL
-    }
 }
