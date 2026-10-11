@@ -50,18 +50,22 @@ final class PorcelainV2ParserTests: XCTestCase {
         XCTAssertThrowsError(try PorcelainV2Parser.parse(Data("unexpected\0".utf8)))
     }
 
-    func testSidebarBadgeCombinesLocalChangesAndUpstreamBehindCount() throws {
-        let status = try PorcelainV2Parser.parse(Data((
+    func testSidebarBadgeCombinesLocalChangesAndUpstreamCounts() throws {
+        var status = try PorcelainV2Parser.parse(Data((
             "# branch.upstream origin/main\0" +
-            "# branch.ab +0 -5\0" +
+            "# branch.ab +3 -5\0" +
             "? first.txt\0" +
             "? second.txt\0"
         ).utf8))
+        status.pushAccess = .allowed
         var state = RepositoryRefreshState(status: status)
 
-        XCTAssertEqual(state.sidebarBadge, "L2 || U5")
+        XCTAssertEqual(state.sidebarBadge, "L2 || P3 || U5")
 
         state.status?.branch.behind = 0
+        XCTAssertEqual(state.sidebarBadge, "L2 || P3")
+
+        state.status?.branch.ahead = 0
         XCTAssertEqual(state.sidebarBadge, "L2")
         XCTAssertNil(RepositoryRefreshState().sidebarBadge)
     }

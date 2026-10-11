@@ -74,6 +74,11 @@ nonisolated protocol ProcessRunning: Sendable {
         priority: ProcessPriority
     ) async throws -> ProcessCommandResult
     func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult
+    func executeAfterAdmission(
+        _ request: ProcessExecutionRequest,
+        timeout: Duration,
+        onAdmission: @escaping @Sendable () async throws -> Void
+    ) async throws -> ProcessCommandResult
     func executeStreaming(
         repository: URL?,
         arguments: [String],
@@ -109,6 +114,14 @@ extension ProcessRunning {
             timeout: timeout,
             priority: priority
         )
+    }
+
+    func executeAfterAdmission(
+        _ request: ProcessExecutionRequest,
+        timeout: Duration,
+        onAdmission: @escaping @Sendable () async throws -> Void
+    ) async throws -> ProcessCommandResult {
+        throw ProcessRunnerError.launchFailed("Runner does not support post-admission callbacks")
     }
 
     func runStreaming(
@@ -226,6 +239,20 @@ actor ProcessRunner: ProcessRunning {
             control: nil
         )
     }
+    func executeAfterAdmission(
+        _ request: ProcessExecutionRequest,
+        timeout: Duration,
+        onAdmission: @escaping @Sendable () async throws -> Void
+    ) async throws -> ProcessCommandResult {
+        try await execute(
+            request: request,
+            timeout: timeout,
+            outputHandler: nil,
+            control: nil,
+            onAdmission: onAdmission
+        )
+    }
+
     func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult {
         try await execute(request: request, timeout: nil, outputHandler: nil, control: nil)
     }
@@ -263,10 +290,13 @@ actor ProcessRunner: ProcessRunning {
         request: ProcessExecutionRequest,
         timeout: Duration?,
         outputHandler: (@Sendable (ProcessOutputStream, Data) -> Void)?,
-        control: ProcessControl?
+        control: ProcessControl?,
+        onAdmission: (@Sendable () async throws -> Void)? = nil
     ) async throws -> ProcessCommandResult {
         try await limiter.acquire(priority: request.priority)
         do {
+            try Task.checkCancellation()
+            try await onAdmission?()
             try Task.checkCancellation()
         } catch {
             await limiter.release()
@@ -329,6 +359,18 @@ actor GitProcessRunner: ProcessRunning {
             priority: priority
         )
     }
+    func executeAfterAdmission(
+        _ request: ProcessExecutionRequest,
+        timeout: Duration,
+        onAdmission: @escaping @Sendable () async throws -> Void
+    ) async throws -> ProcessCommandResult {
+        try await runner.executeAfterAdmission(
+            request,
+            timeout: timeout,
+            onAdmission: onAdmission
+        )
+    }
+
     func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult {
         try await runner.executeWithoutTimeout(request)
     }

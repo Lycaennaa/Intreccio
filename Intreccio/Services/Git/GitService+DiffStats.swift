@@ -15,12 +15,18 @@ extension GitService {
         includeDiffStats: Bool = false,
         expandUntrackedDirectories: Bool = true
     ) async throws -> RepoStatus {
-        let status = try await statusWithoutDiffStats(
+        var status = try await statusWithoutDiffStats(
             repository: repository,
             refreshUpstream: refreshUpstream,
             priority: priority,
             expandUntrackedDirectories: expandUntrackedDirectories
         )
+        status.pushAccess = try await pushAccessForStatus(
+            status,
+            repository: repository,
+            priority: priority
+        )
+
         return try await statusWithDiffStats(
             status,
             repository: repository,

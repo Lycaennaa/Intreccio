@@ -6,6 +6,7 @@ typealias GitProcessLimiter = ProcessLimiter
 
 nonisolated struct RecordedGitInvocation: Sendable, Equatable {
     let arguments: [String]
+    let environment: [String: String]
     let acceptedExitCodes: Set<Int32>
     let outputLimit: Int
     let timeout: Duration
@@ -38,6 +39,7 @@ actor RecordingGitRunner {
         invocations.append(
             RecordedGitInvocation(
                 arguments: arguments,
+                environment: environment,
                 acceptedExitCodes: acceptedExitCodes,
                 outputLimit: outputLimit,
                 timeout: timeout,

@@ -23,6 +23,7 @@ extension AppShellTests {
         status.branch.head = "main"
         status.branch.upstream = "origin/main"
         status.branch.ahead = 2
+        status.pushAccess = .allowed
         status.changes = [FileChange(
             path: "dirty.txt",
             originalPath: nil,
@@ -33,6 +34,11 @@ extension AppShellTests {
         )]
 
         XCTAssertTrue(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        status.pushAccess = .denied
+        XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        status.pushAccess = .unavailable
+        XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        status.pushAccess = .allowed
         status.branch.behind = 1
         XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
         status.branch.behind = 0

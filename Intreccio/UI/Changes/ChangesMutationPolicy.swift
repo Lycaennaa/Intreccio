@@ -143,5 +143,6 @@ nonisolated enum ChangesMutationPolicy {
             && status.branch.upstream != nil
             && status.branch.ahead > 0
             && status.branch.behind == 0
+            && status.pushAccess.allowsPush
     }
 }

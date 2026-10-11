@@ -74,8 +74,12 @@ nonisolated struct RepositoryRefreshState: Sendable, Equatable {
 
     var sidebarBadge: String? {
         guard let status, let changeCount else { return nil }
-        let local = "L\(changeCount)"
-        return status.branch.behind > 0 ? "\(local) || U\(status.branch.behind)" : local
+        var indicators = ["L\(changeCount)"]
+        if status.branch.ahead > 0, status.pushAccess.allowsPush {
+            indicators.append("P\(status.branch.ahead)")
+        }
+        if status.branch.behind > 0 { indicators.append("U\(status.branch.behind)") }
+        return indicators.joined(separator: " || ")
     }
 
     static func == (lhs: RepositoryRefreshState, rhs: RepositoryRefreshState) -> Bool {

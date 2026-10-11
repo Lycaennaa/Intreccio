@@ -41,6 +41,26 @@ final class GitServiceIntegrationTests: XCTestCase {
         XCTAssertFalse(untrackedPaths.contains("nested/"))
     }
 
+    func testStatusReportsAheadCountWhenAheadBehindConfigIsDisabled() async throws {
+        let fixture = try GitFixture(testCase: self)
+        try fixture.write("base\n", to: "tracked.txt")
+        try fixture.git("add", "--", "tracked.txt")
+        try fixture.git("commit", "-m", "base")
+        let upstreamObjectID = try fixture.git("rev-parse", "HEAD").standardOutputText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        try fixture.git("remote", "add", "origin", ".")
+        try fixture.git("update-ref", "refs/remotes/origin/main", upstreamObjectID)
+        try fixture.git("branch", "--set-upstream-to=origin/main", "main")
+        try fixture.write("ahead\n", to: "tracked.txt")
+        try fixture.git("commit", "-am", "ahead")
+        try fixture.git("config", "status.aheadBehind", "false")
+
+        let status = try await GitService().status(repository: fixture.url)
+
+        XCTAssertEqual(status.branch.ahead, 1)
+        XCTAssertEqual(RepositoryRefreshState(status: status).sidebarBadge, "L0 || P1")
+    }
+
     func testIgnoredPathsUsesGitIgnoreRulesWithoutFilteringTrackedPaths() async throws {
         let fixture = try GitFixture(testCase: self)
         try fixture.write("ignored/\n*.cache\n", to: ".gitignore")

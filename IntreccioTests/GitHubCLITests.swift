@@ -157,6 +157,80 @@ final class GitHubCLITests: XCTestCase {
         XCTAssertEqual(invocations.count, 1)
     }
 
+    func testHasWriteAccessAllowsOwnerMaintainerAndWriter() async throws {
+        let repository = try XCTUnwrap(URL(string: "https://github.com/octo/repo"))
+        for permission in ["ADMIN", "MAINTAIN", "WRITE"] {
+            let runner = RecordingGitRunner(responses: [
+                .result(recordedGitResult()),
+                .result(recordedGitResult(output: "\(permission)\n"))
+            ])
+
+            let hasWriteAccess = try await GitHubCLI(executableURL: nil, runner: runner)
+                .hasWriteAccess(to: repository)
+
+            XCTAssertTrue(hasWriteAccess)
+            let invocations = await runner.invocations
+            XCTAssertEqual(invocations.map(\.arguments), [
+                ["auth", "status", "--hostname", "github.com"],
+                [
+                    "repo", "view", "octo/repo", "--json", "viewerPermission",
+                    "--jq", ".viewerPermission"
+                ]
+            ])
+            XCTAssertEqual(invocations[1].environment["GH_HOST"], "github.com")
+            let environment = GitProcessEnvironment.prepare(
+                inherited: ["GH_HOST": "ghe.example"],
+                overrides: invocations[1].environment
+            )
+            XCTAssertEqual(environment["GH_HOST"], "github.com")
+        }
+    }
+
+    func testHasWriteAccessRejectsReadOnlyPermission() async throws {
+        let runner = RecordingGitRunner(responses: [
+            .result(recordedGitResult()),
+            .result(recordedGitResult(output: "READ\n"))
+        ])
+
+        let hasWriteAccess = try await GitHubCLI(executableURL: nil, runner: runner)
+            .hasWriteAccess(to: XCTUnwrap(URL(string: "https://github.com/octo/repo")))
+
+        XCTAssertFalse(hasWriteAccess)
+    }
+
+    func testHasWriteAccessRejectsUnknownPermission() async {
+        let runner = RecordingGitRunner(responses: [
+            .result(recordedGitResult()),
+            .result(recordedGitResult(output: "OWNER\n"))
+        ])
+
+        do {
+            _ = try await GitHubCLI(executableURL: nil, runner: runner).hasWriteAccess(
+                to: XCTUnwrap(URL(string: "https://github.com/octo/repo"))
+            )
+            XCTFail("Expected an unknown permission to fail closed")
+        } catch {
+            XCTAssertEqual(error as? GitHubCLIError, .invalidPermissionResponse)
+        }
+    }
+
+    func testHasWriteAccessRequiresGitHubAuthentication() async {
+        let runner = RecordingGitRunner(responses: [
+            .result(recordedGitResult(error: "not logged in", exitCode: 1))
+        ])
+
+        do {
+            _ = try await GitHubCLI(executableURL: nil, runner: runner).hasWriteAccess(
+                to: URL(string: "https://github.com/octo/repo")!
+            )
+            XCTFail("Expected GitHub authentication")
+        } catch {
+            XCTAssertEqual(error as? GitHubCLIError, .notAuthenticated)
+        }
+        let invocations = await runner.invocations
+        XCTAssertEqual(invocations.count, 1)
+    }
+
     func testMissingCLIExplainsTerminalLogin() async {
         do {
             _ = try await GitHubCLI(executableURL: nil).repositories()

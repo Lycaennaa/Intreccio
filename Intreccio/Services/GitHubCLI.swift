@@ -34,6 +34,7 @@ nonisolated enum GitHubCLIError: Error, Equatable, CustomStringConvertible {
     case notInstalled
     case notAuthenticated
     case invalidRepositoryResponse
+    case invalidPermissionResponse
     case commandFailed(String)
 
     var description: String {
@@ -44,6 +45,8 @@ nonisolated enum GitHubCLIError: Error, Equatable, CustomStringConvertible {
             "GitHub CLI is not signed in. Run `gh auth login` in Terminal, then retry."
         case .invalidRepositoryResponse:
             "GitHub CLI returned an invalid repository list."
+        case .invalidPermissionResponse:
+            "GitHub CLI returned an invalid repository permission."
         case .commandFailed(let message):
             message
         }
@@ -107,6 +110,7 @@ nonisolated struct GitHubCLI: Sendable {
         "GH_PROMPT_DISABLED": "1",
         "LC_ALL": "C"
     ]
+    private static let processLimiter = ProcessLimiter(maximumConcurrent: 1)
 
     private let runner: (any ProcessRunning)?
 
@@ -114,7 +118,7 @@ nonisolated struct GitHubCLI: Sendable {
         if let runner {
             self.runner = runner
         } else if let executableURL {
-            self.runner = ProcessRunner(executable: executableURL.path)
+            self.runner = ProcessRunner(executable: executableURL.path, limiter: Self.processLimiter)
         } else {
             self.runner = nil
         }
@@ -126,6 +130,30 @@ nonisolated struct GitHubCLI: Sendable {
             acceptedExitCodes: [0, 1]
         )
         return result.exitCode == 0
+    }
+
+    func hasWriteAccess(to repository: URL) async throws -> Bool {
+        guard let webURL = GitHubRepositoryURL.webURL(from: repository.absoluteString) else {
+            throw GitHubCLIError.invalidRepositoryResponse
+        }
+        let components = webURL.path.split(separator: "/", omittingEmptySubsequences: true)
+        guard components.count == 2 else { throw GitHubCLIError.invalidRepositoryResponse }
+        guard try await isAuthenticated() else { throw GitHubCLIError.notAuthenticated }
+
+        let environment = Self.commandEnvironment.merging(["GH_HOST": "github.com"]) { _, new in new }
+        let result = try await run([
+            "repo", "view", components.map(String.init).joined(separator: "/"),
+            "--json", "viewerPermission", "--jq", ".viewerPermission"
+        ], environment: environment)
+        guard let permission = String(bytes: result.standardOutput, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) else {
+            throw GitHubCLIError.invalidPermissionResponse
+        }
+        switch permission {
+        case "ADMIN", "MAINTAIN", "WRITE": return true
+        case "TRIAGE", "READ", "NONE": return false
+        default: throw GitHubCLIError.invalidPermissionResponse
+        }
     }
 
     func repositories() async throws -> [GitHubRepository] {
@@ -189,13 +217,14 @@ nonisolated struct GitHubCLI: Sendable {
 
     private func run(
         _ arguments: [String],
-        acceptedExitCodes: Set<Int32> = [0]
+        acceptedExitCodes: Set<Int32> = [0],
+        environment: [String: String] = Self.commandEnvironment
     ) async throws -> ProcessCommandResult {
         guard let runner else { throw GitHubCLIError.notInstalled }
         do {
             return try await runner.run(
                 arguments: arguments,
-                environment: Self.commandEnvironment,
+                environment: environment,
                 acceptedExitCodes: acceptedExitCodes,
                 outputLimit: ProcessRunner.defaultOutputLimit,
                 timeout: ProcessRunner.networkTimeout,

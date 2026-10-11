@@ -102,9 +102,21 @@ nonisolated struct BranchStatus: Sendable, Equatable {
     var behind = 0
 }
 
+nonisolated enum PushAccess: Sendable, Equatable {
+    case allowed
+    case denied
+    case unavailable
+    case notGitHub
+
+    var allowsPush: Bool {
+        self == .allowed || self == .notGitHub
+    }
+}
+
 nonisolated struct RepoStatus: Sendable, Equatable {
     var branch = BranchStatus()
     var changes: [FileChange] = []
+    var pushAccess: PushAccess = .unavailable
     var isRebaseInProgress = false
     var hasStash = false
     var stagedLineStats: DiffLineStats?

@@ -187,6 +187,7 @@ extension GitService {
             repository: repository,
             arguments: [
                 "status", "--porcelain=v2", "-z", "--branch", "--show-stash",
+                "--ahead-behind",
                 "--untracked-files=normal"
             ],
             environment: environment,

@@ -26,6 +26,9 @@ nonisolated enum GitServiceError: Error, Equatable, CustomStringConvertible {
     case branchHasNoOutgoingCommits
     case branchBehindUpstream
     case invalidPushDestination(String)
+    case remoteWriteAccessDenied(String)
+    case remoteWriteAccessUnavailable(String)
+    case pushDestinationsFailed(succeeded: [String], failures: [String])
     case pushTargetChanged
     case rebaseAlreadyInProgress
     case rebaseNotInProgress
@@ -85,6 +88,13 @@ nonisolated enum GitServiceError: Error, Equatable, CustomStringConvertible {
         case .branchHasNoOutgoingCommits: "The current branch has no commits to push"
         case .branchBehindUpstream: "Rebase the current branch before pushing"
         case .invalidPushDestination(let ref): "The configured push destination is invalid: \(ref)"
+        case .remoteWriteAccessDenied(let repository):
+            "The logged-in GitHub user does not have write access to \(repository)"
+        case .remoteWriteAccessUnavailable(let repository):
+            "Could not verify the logged-in GitHub user's write access to \(repository)"
+        case .pushDestinationsFailed(let succeeded, let failures):
+            "Push was incomplete. Succeeded: \(succeeded.isEmpty ? "none" : succeeded.joined(separator: ", ")); "
+                + "failed: \(failures.joined(separator: ", "))"
         case .pushTargetChanged: "The branch or push destination changed after confirmation. Review and confirm again."
         case .rebaseAlreadyInProgress: "A rebase is already in progress"
         case .rebaseNotInProgress: "No rebase is in progress"
