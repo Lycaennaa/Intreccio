@@ -35,6 +35,10 @@ nonisolated enum ResourceIdentity {
             if let data = value as? NSData { return Data(referencing: data).base64EncodedString() }
             return String(describing: value)
         }
+        return readFileSystemID(from: url)
+    }
+
+    static func readFileSystemID(from url: URL) -> String? {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
               let device = attributes[.systemNumber] as? NSNumber,
               let fileNumber = attributes[.systemFileNumber] as? NSNumber else { return nil }

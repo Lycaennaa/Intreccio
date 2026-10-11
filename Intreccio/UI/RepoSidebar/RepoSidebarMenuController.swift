@@ -26,7 +26,7 @@ final class RepoSidebarMenuController: NSObject {
     private let coordinator: AppCoordinator
     private let githubMenuController: RepoSidebarGitHubMenuController
     private let applicationController: RepoSidebarApplicationController
-    private let t3CodeController: RepoSidebarT3CodeController
+    private let aiToolController: RepoSidebarAIController
     private let justMenuController: RepoSidebarJustMenuController
     let quickOpenController: RepoSidebarQuickOpenController
 
@@ -42,7 +42,7 @@ final class RepoSidebarMenuController: NSObject {
         self.coordinator = coordinator
         self.githubMenuController = githubMenuController
         self.applicationController = applicationController
-        self.t3CodeController = RepoSidebarT3CodeController(
+        self.aiToolController = RepoSidebarAIController(
             coordinator: coordinator,
             directoryProvider: applicationController
         )
@@ -66,7 +66,7 @@ final class RepoSidebarMenuController: NSObject {
         }
         githubMenuController.clearMenuContext(for: menu)
         applicationController.clearMenuContext(for: menu)
-        t3CodeController.clearMenuContext(for: menu)
+        aiToolController.clearMenuContext(for: menu)
         quickOpenController.clearMenuContext(for: menu)
 
         justMenuController.clearMenuContext(for: menu)
@@ -124,7 +124,7 @@ final class RepoSidebarMenuController: NSObject {
         repositories: [RepoDescriptor],
         target: RepositorySelectionTarget
     ) {
-        t3CodeController.addMenu(to: menu, context: context)
+        aiToolController.addMenu(to: menu, context: context)
 
         applicationController.addOpenApplicationMenu(
             to: menu,
@@ -250,7 +250,7 @@ final class RepoSidebarMenuController: NSObject {
         menuContext = context
         githubMenuController.updateMenuContext(context)
         applicationController.updateMenuContext(context)
-        t3CodeController.updateMenuContext(context)
+        aiToolController.updateMenuContext(context)
         quickOpenController.updateMenuContext(context)
         justMenuController.updateMenuContext(context)
     }
@@ -261,7 +261,7 @@ final class RepoSidebarMenuController: NSObject {
     func cancelOperationsForTermination() -> [Task<Void, Never>] {
         isTerminating = true
         let tasks = Array(operationTasks.values)
-            + t3CodeController.cancelOperationsForTermination()
+            + aiToolController.cancelOperationsForTermination()
             + justMenuController.cancelOperationsForTermination()
         tasks.forEach { $0.cancel() }
         operationTasks.removeAll()
@@ -270,7 +270,7 @@ final class RepoSidebarMenuController: NSObject {
 
     func resumeOperationsAfterFailedTermination() {
         isTerminating = false
-        t3CodeController.resumeOperationsAfterFailedTermination()
+        aiToolController.resumeOperationsAfterFailedTermination()
         justMenuController.resumeOperationsAfterFailedTermination()
     }
 
