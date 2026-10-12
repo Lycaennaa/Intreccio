@@ -26,6 +26,7 @@ This list covers features in the current app. Intreccio uses the Git installatio
 ## Other
 - Run recipes from repository `justfile` files when `just` is installed.
 - Choose applications for opening folders and supported file types.
+- From a repository's Open in AI Tool menu, open OMP in Apple Terminal or Tern. Tern offers a new window, a tab in its first existing window, or a right-hand split of that window's focused pane.
 - Adjust diff font size, whitespace display, file-watching refresh timing, and repository sources.
 
 ## Limitations

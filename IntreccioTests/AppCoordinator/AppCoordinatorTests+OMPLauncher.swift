@@ -3,6 +3,14 @@ import XCTest
 
 extension AppCoordinatorTests {
     func testOMPScriptChecksQuotedRepositoryAndIdentity() throws {
+        let expectedOMPExecutableURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+            .appendingPathComponent("Tern", isDirectory: true)
+            .appendingPathComponent("omp", isDirectory: true)
+            .appendingPathComponent("bin", isDirectory: true)
+            .appendingPathComponent("omp")
+        XCTAssertEqual(OMPLauncher.defaultOMPExecutableURL, expectedOMPExecutableURL)
         let directory = try makeTestDirectory()
         let repository = directory.appendingPathComponent("Repo's source", isDirectory: true)
         try FileManager.default.createDirectory(at: repository, withIntermediateDirectories: true)
@@ -14,16 +22,19 @@ extension AppCoordinatorTests {
             in: repository,
             expectedFileSystemID: expectedFileSystemID,
             repositoryID: repositoryID,
-            scriptsDirectory: scriptsDirectory
+            scriptsDirectory: scriptsDirectory,
+            ompExecutableURL: OMPLauncher.defaultOMPExecutableURL
         )
         let script = try String(contentsOf: scriptURL, encoding: .utf8)
         let quotedPath = repository.path.replacingOccurrences(of: "'", with: "'\\''")
+        let quotedOMPExecutablePath = expectedOMPExecutableURL.path
+            .replacingOccurrences(of: "'", with: "'\\''")
 
         XCTAssertEqual(scriptURL.lastPathComponent, "a6d34c09-2a39-40fb-9e5b-50d69a04ca7a.command")
         XCTAssertTrue(script.contains("cd -- '\(quotedPath)' || exit"))
         let identityGuard = "if [ \"$(/usr/bin/stat -f '%d:%i' .)\" != '\(expectedFileSystemID)' ]; then"
         XCTAssertTrue(script.contains(identityGuard))
-        XCTAssertTrue(script.hasSuffix("exec omp\n"))
+        XCTAssertTrue(script.hasSuffix("exec '\(quotedOMPExecutablePath)'\n"))
         let attributes = try FileManager.default.attributesOfItem(atPath: scriptURL.path)
         XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o700)
     }
@@ -33,28 +44,26 @@ extension AppCoordinatorTests {
         let repository = root.appendingPathComponent("Repo", isDirectory: true)
         try FileManager.default.createDirectory(at: repository, withIntermediateDirectories: true)
         let expectedFileSystemID = try XCTUnwrap(ResourceIdentity.readFileSystemID(from: repository))
+        let binaryDirectory = root.appendingPathComponent("bin with spaces", isDirectory: true)
+        try FileManager.default.createDirectory(at: binaryDirectory, withIntermediateDirectories: true)
+        let fakeOMP = binaryDirectory.appendingPathComponent("omp's stub")
         let scriptURL = try OMPLauncher.writeScript(
             in: repository,
             expectedFileSystemID: expectedFileSystemID,
             repositoryID: UUID(),
-            scriptsDirectory: root.appendingPathComponent("scripts", isDirectory: true)
+            scriptsDirectory: root.appendingPathComponent("scripts", isDirectory: true),
+            ompExecutableURL: fakeOMP
         )
-        let binaryDirectory = root.appendingPathComponent("bin", isDirectory: true)
-        try FileManager.default.createDirectory(at: binaryDirectory, withIntermediateDirectories: true)
         let markerURL = root.appendingPathComponent("omp-ran")
-        let fakeOMP = binaryDirectory.appendingPathComponent("omp")
         let quotedMarker = "'\(markerURL.path.replacingOccurrences(of: "'", with: "'\\''"))'"
         try "#!/bin/sh\n: > \(quotedMarker)\n".write(to: fakeOMP, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fakeOMP.path)
-        var environment = ProcessInfo.processInfo.environment
-        environment["PATH"] = "\(binaryDirectory.path):\(environment["PATH"] ?? "")"
 
         func runScript() throws -> (status: Int32, standardError: String) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = ["-f", scriptURL.path]
             process.currentDirectoryURL = root
-            process.environment = environment
             let standardError = Pipe()
             process.standardError = standardError
             try process.run()
@@ -84,15 +93,21 @@ extension AppCoordinatorTests {
         let repository = directory.appendingPathComponent("Repo's source", isDirectory: true)
         let fileSystemID = "123:456"
         let repositoryID = UUID()
+        let ompExecutableURL = OMPLauncher.defaultOMPExecutableURL
         let scriptURL = try OMPLauncher.writeScript(
             in: repository,
             expectedFileSystemID: fileSystemID,
             repositoryID: repositoryID,
-            scriptsDirectory: directory.appendingPathComponent("scripts", isDirectory: true)
+            scriptsDirectory: directory.appendingPathComponent("scripts", isDirectory: true),
+            ompExecutableURL: ompExecutableURL
         )
         let script = try String(contentsOf: scriptURL, encoding: .utf8)
         let command = try XCTUnwrap(
-            OMPLauncher.ternArguments(in: repository, expectedFileSystemID: fileSystemID).last
+            OMPLauncher.ternArguments(
+                in: repository,
+                expectedFileSystemID: fileSystemID,
+                ompExecutableURL: ompExecutableURL
+            ).last
         )
 
         XCTAssertTrue(command.contains("stat -f '%d:%i' ."))
@@ -102,22 +117,58 @@ extension AppCoordinatorTests {
 
     func testTernArgumentsEnterQuotedRepositoryDirectoryBeforeRunningOMP() {
         let repository = URL(fileURLWithPath: "/work/Repo's source", isDirectory: true)
+        let ompExecutableURL = OMPLauncher.defaultOMPExecutableURL
+        let quotedOMPExecutablePath = ompExecutableURL.path
+            .replacingOccurrences(of: "'", with: "'\\''")
         let command = [
             "cd -- '/work/Repo'\\''s source' || exit",
             "if [ \"$(/usr/bin/stat -f '%d:%i' .)\" != '123:456' ]; then",
             "  printf '%s\\n' 'Repository changed before OMP launch.' >&2",
             "  exit 1",
             "fi",
-            "exec omp"
+            "exec '\(quotedOMPExecutablePath)'"
         ].joined(separator: "\n")
 
         XCTAssertEqual(
-            OMPLauncher.ternArguments(in: repository, expectedFileSystemID: "123:456"),
+            OMPLauncher.ternArguments(
+                in: repository,
+                expectedFileSystemID: "123:456",
+                ompExecutableURL: ompExecutableURL
+            ),
             ["-e", "/bin/zsh", "-l", "-c", command]
+        )
+        XCTAssertEqual(
+            OMPLauncher.ternArguments(
+                in: repository,
+                expectedFileSystemID: "123:456",
+                windowMode: .appendToWindow,
+                ompExecutableURL: ompExecutableURL
+            ),
+            ["new", "tab", "--cwd", repository.path, "--", "/bin/zsh", "-l", "-c", command]
+        )
+        XCTAssertEqual(
+            OMPLauncher.ternArguments(
+                in: repository,
+                expectedFileSystemID: "123:456",
+                windowMode: .splitView,
+                ompExecutableURL: ompExecutableURL
+            ),
+            [
+                "split",
+                "@focused",
+                "right",
+                "--cwd",
+                repository.path,
+                "--",
+                "/bin/zsh",
+                "-l",
+                "-c",
+                command
+            ]
         )
     }
 
-    func testAIOMPMenuOffersTerminalAppAndTern() async throws {
+    func testAIOMPMenuOffersTerminalAppAndTernLaunchModes() async throws {
         let directory = try makeTestDirectory()
         let repository = directory.appendingPathComponent("Repo", isDirectory: true)
         try initializeRepository(at: repository)
@@ -138,13 +189,40 @@ extension AppCoordinatorTests {
         controller.menuController.populateRepositoryMenu(
             makeRepositoryMenuContext(for: menu, repositoryID: repositoryID, presentingWindow: window)
         )
-        let aiToolSubmenu = try XCTUnwrap(menu.items.first(where: { $0.title == "Open in AI Tool" })?.submenu)
+        try checkAIOMPMenuStructure(in: menu, repositoryID: repositoryID)
+    }
+
+    private func checkAIOMPMenuStructure(in menu: NSMenu, repositoryID: UUID) throws {
+        let aiToolSubmenu = try XCTUnwrap(
+            menu.items.first(where: { $0.title == "Open in AI Tool" })?.submenu
+        )
         let ompMenu = try XCTUnwrap(aiToolSubmenu.items.first(where: { $0.title == "OMP" }))
         let ompItems = try XCTUnwrap(ompMenu.submenu).items
-        XCTAssertEqual(ompItems.map(\.title), TerminalChoice.allCases.map(\.menuTitle))
-        for (item, terminal) in zip(ompItems, TerminalChoice.allCases) {
+        XCTAssertEqual(
+            ompItems.map(\.title),
+            [TerminalChoice.appleTerminal.menuTitle, TerminalChoice.tern.menuTitle]
+        )
+
+        let appleTerminalItem = try XCTUnwrap(
+            ompItems.first(where: { $0.title == TerminalChoice.appleTerminal.menuTitle })
+        )
+        let appleTerminalTarget = try XCTUnwrap(
+            appleTerminalItem.representedObject as? RepoSidebarAIController.OpenTarget
+        )
+        XCTAssertEqual(appleTerminalTarget.destination, .omp(.appleTerminal))
+        XCTAssertEqual(appleTerminalTarget.repositoryIDs, [repositoryID])
+        XCTAssertTrue(appleTerminalItem.target is RepoSidebarAIController)
+        XCTAssertEqual(
+            NSStringFromSelector(try XCTUnwrap(appleTerminalItem.action)),
+            "openSelectedRepositories:"
+        )
+
+        let ternItem = try XCTUnwrap(ompItems.first(where: { $0.title == TerminalChoice.tern.menuTitle }))
+        let ternItems = try XCTUnwrap(ternItem.submenu).items
+        XCTAssertEqual(ternItems.map(\.title), OMPLauncher.TernLaunchMode.allCases.map(\.menuTitle))
+        for (item, mode) in zip(ternItems, OMPLauncher.TernLaunchMode.allCases) {
             let target = try XCTUnwrap(item.representedObject as? RepoSidebarAIController.OpenTarget)
-            XCTAssertEqual(target.destination, .omp(terminal))
+            XCTAssertEqual(target.destination, .omp(.tern(mode)))
             XCTAssertEqual(target.repositoryIDs, [repositoryID])
             XCTAssertTrue(item.target is RepoSidebarAIController)
             XCTAssertEqual(NSStringFromSelector(try XCTUnwrap(item.action)), "openSelectedRepositories:")
@@ -152,7 +230,7 @@ extension AppCoordinatorTests {
         XCTAssertNotNil(aiToolSubmenu.items.first(where: { $0.title == "T3 Code" }))
     }
 
-    func testTerminalLaunchErrorsWaitForFailedTermination() {
+    func testAsyncOMPLaunchErrorsWaitForFailedTermination() throws {
         let coordinator = makeCoordinator(stateFile: URL(fileURLWithPath: "/unused"))
         let controller = RepoSidebarAIController(
             coordinator: coordinator,
@@ -171,13 +249,23 @@ extension AppCoordinatorTests {
         }
         let menu = NSMenu()
         let context = makeRepositoryMenuContext(for: menu, repositoryID: UUID(), presentingWindow: window)
+        controller.addMenu(to: menu, context: context)
+        let aiToolSubmenu = try XCTUnwrap(
+            menu.items.first(where: { $0.title == "Open in AI Tool" })?.submenu
+        )
+        let ompItem = try XCTUnwrap(aiToolSubmenu.items.first(where: { $0.title == "OMP" }))
+        let terminalItem = try XCTUnwrap(
+            ompItem.submenu?.items.first(where: { $0.title == TerminalChoice.appleTerminal.menuTitle })
+        )
+        let target = try XCTUnwrap(terminalItem.representedObject as? RepoSidebarAIController.OpenTarget)
 
         _ = controller.cancelOperationsForTermination()
-        controller.presentOpenError(
+        controller.reportOpenErrorIfCurrent(
             applicationName: "OMP in Apple Terminal",
             path: "/repo",
             description: "Terminal could not open the command.",
-            context: context
+            context: target.context,
+            generation: target.generation
         )
         XCTAssertTrue(window.sheets.isEmpty)
 

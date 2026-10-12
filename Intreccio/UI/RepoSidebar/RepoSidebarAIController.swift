@@ -38,12 +38,12 @@ final class RepoSidebarAIController: NSObject {
 
     enum OpenDestination: Equatable {
         case t3Code(T3CodeInstalledApplication?)
-        case omp(TerminalChoice)
+        case omp(OMPLauncher.Destination)
 
         var applicationName: String {
             switch self {
             case .t3Code(let application): application?.menuTitle ?? "T3 Code"
-            case .omp(let terminal): "OMP in \(terminal.menuTitle)"
+            case .omp(let destination): destination.applicationName
             }
         }
     }
@@ -98,22 +98,9 @@ final class RepoSidebarAIController: NSObject {
         updateMenuContext(context)
         let generation = contextGeneration
         let openInAIToolSubmenu = NSMenu()
-        let ompSubmenu = NSMenu()
-        for terminal in TerminalChoice.allCases {
-            addMenuItem(
-                terminal.menuTitle,
-                target: OpenTarget(
-                    context: context,
-                    destination: .omp(terminal),
-                    generation: generation
-                ),
-                to: ompSubmenu
-            )
-        }
         let ompMenuItem = NSMenuItem(title: "OMP", action: nil, keyEquivalent: "")
-        ompMenuItem.submenu = ompSubmenu
+        ompMenuItem.submenu = makeOMPSMenu(context: context, generation: generation)
         openInAIToolSubmenu.addItem(ompMenuItem)
-
         let applications = T3CodeApplicationService.installedApplications()
         if applications.count > 1 {
             let t3Submenu = NSMenu()
@@ -200,8 +187,12 @@ final class RepoSidebarAIController: NSObject {
     }
 
     private func isCurrent(context: RepoSidebarMenuContext, generation: UInt64) -> Bool {
-        guard !Task.isCancelled, !isTerminating,
-              contextGeneration == generation,
+        guard !Task.isCancelled, !isTerminating else { return false }
+        return isMenuContextCurrent(context: context, generation: generation)
+    }
+
+    private func isMenuContextCurrent(context: RepoSidebarMenuContext, generation: UInt64) -> Bool {
+        guard contextGeneration == generation,
               let activeContext = menuContext,
               activeContext.menu === context.menu,
               activeContext.repositoryIDs == context.repositoryIDs else { return false }
@@ -243,19 +234,20 @@ final class RepoSidebarAIController: NSObject {
                     expectedResourceID: directory.resourceID,
                     in: application
                 )
-            case .omp(let terminal):
+            case .omp(let target):
                 try OMPLauncher.open(
                     in: directory.url,
                     expectedFileSystemID: directory.fileSystemID,
                     repositoryID: repositoryID,
-                    using: terminal
+                    to: target
                 ) { [weak self] description in
                     guard let self else { return }
-                    self.presentOpenError(
+                    self.reportOpenErrorIfCurrent(
                         applicationName: destination.applicationName,
                         path: directory.url.path,
                         description: description,
-                        context: context
+                        context: context,
+                        generation: generation
                     )
                 }
             }
@@ -312,6 +304,35 @@ final class RepoSidebarAIController: NSObject {
         operationTasks[operationID] = task
     }
 
+    private func makeOMPSMenu(context: RepoSidebarMenuContext, generation: UInt64) -> NSMenu {
+        let submenu = NSMenu()
+        addMenuItem(
+            TerminalChoice.appleTerminal.menuTitle,
+            target: OpenTarget(
+                context: context,
+                destination: .omp(.appleTerminal),
+                generation: generation
+            ),
+            to: submenu
+        )
+        let ternSubmenu = NSMenu()
+        for mode in OMPLauncher.TernLaunchMode.allCases {
+            addMenuItem(
+                mode.menuTitle,
+                target: OpenTarget(
+                    context: context,
+                    destination: .omp(.tern(mode)),
+                    generation: generation
+                ),
+                to: ternSubmenu
+            )
+        }
+        let ternMenuItem = NSMenuItem(title: TerminalChoice.tern.menuTitle, action: nil, keyEquivalent: "")
+        ternMenuItem.submenu = ternSubmenu
+        submenu.addItem(ternMenuItem)
+        return submenu
+    }
+
     private func addMenuItem(
         _ title: String,
         target: OpenTarget,
@@ -353,6 +374,21 @@ final class RepoSidebarAIController: NSObject {
             applicationName: applicationName,
             paths: [path],
             description: description
+        )
+    }
+    func reportOpenErrorIfCurrent(
+        applicationName: String,
+        path: String,
+        description: String,
+        context: RepoSidebarMenuContext,
+        generation: UInt64
+    ) {
+        guard isMenuContextCurrent(context: context, generation: generation) else { return }
+        presentOpenError(
+            applicationName: applicationName,
+            path: path,
+            description: description,
+            context: context
         )
     }
 }
