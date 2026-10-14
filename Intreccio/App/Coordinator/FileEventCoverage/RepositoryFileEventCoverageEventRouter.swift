@@ -289,32 +289,42 @@ final class RepositoryFileEventCoverageEventRouter {
         guard !Task.isCancelled else { return [] }
         guard !batch.requiresFullRescan,
               !batch.hasUnrepresentedChanges else { return relevantPaths }
+        let statusRelevantPaths = relevantPaths.filter {
+            !RepositoryFileEventPathClassifier.isUpstreamRefreshMetadataPath(
+                $0,
+                repositoryPathComponents: target.pathComponents,
+                caseSensitive: caseSensitive
+            )
+        }
+        guard !statusRelevantPaths.isEmpty else { return [] }
 
-        let candidatePaths = relevantPaths.filter {
-            !isRepositoryMetadataPath(
+        let candidatePaths = statusRelevantPaths.filter {
+            !RepositoryFileEventPathClassifier.isRepositoryMetadataPath(
                 $0.pathComponents,
                 repositoryPathComponents: target.pathComponents,
                 caseSensitive: caseSensitive
             )
         }
-        let relativePathsByEventPath: [String: String] = Dictionary(uniqueKeysWithValues: candidatePaths.compactMap { path in
-            guard let relativePath = relativePath(
-                path,
-                repositoryPathComponents: target.pathComponents,
-                caseSensitive: caseSensitive
-            ) else { return nil }
-            return (path.path, relativePath)
-        })
-        guard !relativePathsByEventPath.isEmpty else { return relevantPaths }
+        let relativePathsByEventPath: [String: String] = Dictionary(
+            uniqueKeysWithValues: candidatePaths.compactMap { path in
+                guard let relativePath = RepositoryFileEventPathClassifier.relativePath(
+                    path,
+                    repositoryPathComponents: target.pathComponents,
+                    caseSensitive: caseSensitive
+                ) else { return nil }
+                return (path.path, relativePath)
+            }
+        )
+        guard !relativePathsByEventPath.isEmpty else { return statusRelevantPaths }
 
         let ignoredPaths = await ignoredPathResolver(
             repository.canonicalURL,
             Array(Set(relativePathsByEventPath.values))
         )
         guard !Task.isCancelled else { return [] }
-        guard !ignoredPaths.isEmpty else { return relevantPaths }
-        return relevantPaths.filter { path in
-            guard !isRepositoryMetadataPath(
+        guard !ignoredPaths.isEmpty else { return statusRelevantPaths }
+        return statusRelevantPaths.filter { path in
+            guard !RepositoryFileEventPathClassifier.isRepositoryMetadataPath(
                 path.pathComponents,
                 repositoryPathComponents: target.pathComponents,
                 caseSensitive: caseSensitive
@@ -322,50 +332,6 @@ final class RepositoryFileEventCoverageEventRouter {
             let relativePath = relativePathsByEventPath[path.path] else { return true }
             return !ignoredPaths.contains(relativePath)
         }
-    }
-
-    private func isRepositoryMetadataPath(
-        _ eventPathComponents: [String],
-        repositoryPathComponents: [String],
-        caseSensitive: Bool
-    ) -> Bool {
-        let normalizedEventPath = normalizedPathComponents(
-            eventPathComponents,
-            caseSensitive: caseSensitive
-        )
-        let normalizedRepositoryPath = normalizedPathComponents(
-            repositoryPathComponents,
-            caseSensitive: caseSensitive
-        )
-        guard normalizedEventPath.starts(with: normalizedRepositoryPath) else { return false }
-        guard normalizedEventPath.count > normalizedRepositoryPath.count else { return true }
-        return normalizedEventPath[normalizedRepositoryPath.count] == ".git"
-            || normalizedEventPath.last == ".gitignore"
-    }
-
-    private func relativePath(
-        _ eventPath: RepositoryFileEventPath,
-        repositoryPathComponents: [String],
-        caseSensitive: Bool
-    ) -> String? {
-        let normalizedEventPath = normalizedPathComponents(
-            eventPath.pathComponents,
-            caseSensitive: caseSensitive
-        )
-        let normalizedRepositoryPath = normalizedPathComponents(
-            repositoryPathComponents,
-            caseSensitive: caseSensitive
-        )
-        guard normalizedEventPath.starts(with: normalizedRepositoryPath) else { return nil }
-        let relativeComponents = eventPath.pathComponents.dropFirst(repositoryPathComponents.count)
-        return relativeComponents.isEmpty ? "." : relativeComponents.joined(separator: "/")
-    }
-
-    private func normalizedPathComponents(
-        _ pathComponents: [String],
-        caseSensitive: Bool
-    ) -> [String] {
-        pathComponents.map { caseSensitive ? $0 : $0.lowercased() }
     }
 
     private func caseSensitiveVolume(for url: URL) -> Bool {

@@ -55,6 +55,65 @@ extension RepositoryRuntimeControllerTests {
         await runtime.finishShutdown()
     }
 
+    func testUpstreamRefreshMetadataDoesNotRequeueStatusButRelevantGitFilesDo() async throws {
+        let fixture = try GitFixture(testCase: self)
+        let repositoryID = UUID()
+        let repository = RepoDescriptor(
+            id: repositoryID,
+            source: .standalone(id: repositoryID),
+            url: fixture.url,
+            canonicalURL: fixture.url,
+            resourceID: nil,
+            relativePath: nil,
+            availability: .available
+        )
+        let delegate = RuntimeTestDelegate(repositories: [repository])
+        let runtime = RepositoryRuntimeController(gitService: GitService())
+        runtime.delegate = delegate
+        let packPath = fixture.url.appendingPathComponent(".git/objects/pack/pack-test.pack").path
+
+        await runtime.routeRepositoryFileEvents(
+            FileEventBatch(
+                paths: [
+                    fixture.url.appendingPathComponent(".git", isDirectory: true).path,
+                    packPath,
+                    fixture.url.appendingPathComponent(".git/refs/remotes/origin/main").path,
+                    fixture.url.appendingPathComponent(".git/logs/refs/remotes/origin/main").path
+                ],
+                sourceRescanPaths: [packPath],
+                requiresFullRescan: false
+            ),
+            repositoryID: repositoryID
+        )
+        XCTAssertNil(runtime.statusRefreshSnapshot.statusRequestGenerations[repositoryID])
+
+        await runtime.routeRepositoryFileEvents(
+            FileEventBatch(
+                paths: [fixture.url.appendingPathComponent(".gitignore").path],
+                sourceRescanPaths: [],
+                requiresFullRescan: false
+            ),
+            repositoryID: repositoryID
+        )
+        XCTAssertEqual(runtime.statusRefreshSnapshot.statusRequestGenerations[repositoryID], 1)
+
+        await runtime.routeRepositoryFileEvents(
+            FileEventBatch(
+                paths: [
+                    fixture.url.appendingPathComponent(".git/index").path,
+                    fixture.url.appendingPathComponent(".git/refs/heads/main").path
+                ],
+                sourceRescanPaths: [],
+                requiresFullRescan: false
+            ),
+            repositoryID: repositoryID
+        )
+        XCTAssertEqual(runtime.statusRefreshSnapshot.statusRequestGenerations[repositoryID], 2)
+
+        await runtime.cancelAndDrain()
+        await runtime.finishShutdown()
+    }
+
     func testSourceEventAppliesIgnoreRulesPerOverlappingRepository() async throws {
         let fixture = try GitFixture(testCase: self)
         let nestedURL = fixture.url.appendingPathComponent("nested", isDirectory: true)

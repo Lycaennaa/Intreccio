@@ -157,6 +157,83 @@ nonisolated struct RepositoryFileEventPathClassifier: Sendable {
             && ["config", "config.worktree"].contains(normalizedEventPath[gitDirectoryIndex + 1])
     }
 
+    static func isRepositoryMetadataPath(
+        _ eventPathComponents: [String],
+        repositoryPathComponents: [String],
+        caseSensitive: Bool
+    ) -> Bool {
+        let normalizedEventPath = normalizedPathComponents(
+            eventPathComponents,
+            caseSensitive: caseSensitive
+        )
+        let normalizedRepositoryPath = normalizedPathComponents(
+            repositoryPathComponents,
+            caseSensitive: caseSensitive
+        )
+        guard normalizedEventPath.starts(with: normalizedRepositoryPath) else { return false }
+        guard normalizedEventPath.count > normalizedRepositoryPath.count else { return true }
+        return normalizedEventPath[normalizedRepositoryPath.count] == ".git"
+            || normalizedEventPath.last == ".gitignore"
+    }
+
+    // Upstream refresh writes these paths, then includes the updated refs in its status result.
+    static func isUpstreamRefreshMetadataPath(
+        _ eventPath: RepositoryFileEventPath,
+        repositoryPathComponents: [String],
+        caseSensitive: Bool
+    ) -> Bool {
+        let normalizedEventPath = normalizedPathComponents(
+            eventPath.pathComponents,
+            caseSensitive: caseSensitive
+        )
+        let normalizedRepositoryPath = normalizedPathComponents(
+            repositoryPathComponents,
+            caseSensitive: caseSensitive
+        )
+        guard normalizedEventPath.starts(with: normalizedRepositoryPath) else { return false }
+        let repositoryRelativeComponents = normalizedEventPath.dropFirst(
+            normalizedRepositoryPath.count
+        )
+        guard repositoryRelativeComponents.first == ".git" else { return false }
+        let gitMetadataComponents = repositoryRelativeComponents.dropFirst()
+        guard let firstComponent = gitMetadataComponents.first else {
+            return !eventPath.isSourceRescan
+        }
+        switch firstComponent {
+        case "objects":
+            return true
+        case "refs":
+            let refComponents = gitMetadataComponents.dropFirst()
+            return refComponents.isEmpty || refComponents.first == "remotes"
+        case "logs":
+            let logComponents = gitMetadataComponents.dropFirst()
+            guard let firstLogComponent = logComponents.first else { return true }
+            guard firstLogComponent == "refs" else { return false }
+            let refComponents = logComponents.dropFirst()
+            return refComponents.isEmpty || refComponents.first == "remotes"
+        default:
+            return false
+        }
+    }
+
+    static func relativePath(
+        _ eventPath: RepositoryFileEventPath,
+        repositoryPathComponents: [String],
+        caseSensitive: Bool
+    ) -> String? {
+        let normalizedEventPath = normalizedPathComponents(
+            eventPath.pathComponents,
+            caseSensitive: caseSensitive
+        )
+        let normalizedRepositoryPath = normalizedPathComponents(
+            repositoryPathComponents,
+            caseSensitive: caseSensitive
+        )
+        guard normalizedEventPath.starts(with: normalizedRepositoryPath) else { return nil }
+        let relativeComponents = eventPath.pathComponents.dropFirst(repositoryPathComponents.count)
+        return relativeComponents.isEmpty ? "." : relativeComponents.joined(separator: "/")
+    }
+
     private static func normalizedPathComponents(
         _ pathComponents: [String],
         caseSensitive: Bool
