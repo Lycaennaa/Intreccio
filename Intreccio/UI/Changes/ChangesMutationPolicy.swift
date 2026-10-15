@@ -1,5 +1,45 @@
 import Foundation
 
+nonisolated enum PushControlAvailability: Sendable, Equatable {
+    case ready
+    case statusUnavailable
+    case mutationRunning
+    case rebaseInProgress
+    case detachedHead
+    case missingUpstream
+    case noOutgoingCommits
+    case behindUpstream
+    case writeAccessDenied
+    case writeAccessUnavailable
+
+    var isAvailable: Bool { self == .ready }
+
+    var message: String {
+        switch self {
+        case .ready:
+            "Ready to push."
+        case .statusUnavailable:
+            "Repository status is unavailable."
+        case .mutationRunning:
+            "Another repository operation is running."
+        case .rebaseInProgress:
+            "Rebase in progress."
+        case .detachedHead:
+            "No checked-out branch."
+        case .missingUpstream:
+            "No configured upstream."
+        case .noOutgoingCommits:
+            "No outgoing commits."
+        case .behindUpstream:
+            "Behind upstream; rebase before pushing."
+        case .writeAccessDenied:
+            "GitHub write access denied."
+        case .writeAccessUnavailable:
+            "GitHub write access could not be checked."
+        }
+    }
+}
+
 nonisolated enum ChangesMutationPolicy {
     static func stageableChanges(_ changes: [FileChange]) -> [FileChange]? {
         guard !changes.isEmpty,
@@ -135,14 +175,24 @@ nonisolated enum ChangesMutationPolicy {
             && status.changes.isEmpty
         return (canStart, false, false)
     }
-    static func pushControlAvailability(status: RepoStatus?, mutationRunning: Bool) -> Bool {
-        guard let status else { return false }
-        return !mutationRunning
-            && !status.isRebaseInProgress
-            && status.branch.head != nil
-            && status.branch.upstream != nil
-            && status.branch.ahead > 0
-            && status.branch.behind == 0
-            && status.pushAccess.allowsPush
+    static func pushControlAvailability(
+        status: RepoStatus?,
+        mutationRunning: Bool
+    ) -> PushControlAvailability {
+        guard let status else { return .statusUnavailable }
+        guard !mutationRunning else { return .mutationRunning }
+        guard !status.isRebaseInProgress else { return .rebaseInProgress }
+        guard status.branch.head != nil else { return .detachedHead }
+        guard status.branch.upstream != nil else { return .missingUpstream }
+        guard status.branch.ahead > 0 else { return .noOutgoingCommits }
+        guard status.branch.behind == 0 else { return .behindUpstream }
+        switch status.pushAccess {
+        case .allowed, .notGitHub:
+            return .ready
+        case .denied:
+            return .writeAccessDenied
+        case .unavailable:
+            return .writeAccessUnavailable
+        }
     }
 }

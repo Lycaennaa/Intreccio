@@ -32,18 +32,21 @@ extension AppShellTests {
             kind: .ordinary,
             submoduleState: nil
         )]
+        func availability() -> PushControlAvailability {
+            ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false)
+        }
 
-        XCTAssertTrue(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        XCTAssertEqual(availability(), .ready)
         status.pushAccess = .denied
-        XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        XCTAssertEqual(availability(), .writeAccessDenied)
         status.pushAccess = .unavailable
-        XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        XCTAssertEqual(availability(), .writeAccessUnavailable)
         status.pushAccess = .allowed
         status.branch.behind = 1
-        XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        XCTAssertEqual(availability(), .behindUpstream)
         status.branch.behind = 0
         status.isRebaseInProgress = true
-        XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        XCTAssertEqual(availability(), .rebaseInProgress)
     }
 
     @MainActor

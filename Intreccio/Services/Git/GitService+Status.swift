@@ -7,6 +7,12 @@ nonisolated struct GitUpstreamRefreshResult: Sendable {
     let remoteRef: String?
 }
 
+nonisolated struct GitUpstreamCoordinates: Sendable {
+    let remote: String
+    let remoteRef: String
+    let upstreamRef: String
+}
+
 extension GitService {
     func ignoredPaths(
         repository: URL,
@@ -79,38 +85,16 @@ extension GitService {
               let branch = status.branch.head else {
             return GitUpstreamRefreshResult(status: status, remote: nil, remoteRef: nil)
         }
-        let upstreamResult = try await runner.run(
+        guard let coordinates = try await upstreamCoordinates(
             repository: repository,
-            arguments: [
-                "for-each-ref",
-                "--format=%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)",
-                "--count=1",
-                "refs/heads/\(branch)"
-            ],
-            environment: readEnvironment,
-            outputLimit: 12 * 1_024,
+            branch: branch,
             priority: priority
-        )
-        let fields = upstreamResult.standardOutput.split(
-            separator: 0,
-            maxSplits: 2,
-            omittingEmptySubsequences: false
-        )
-        guard fields.count == 3 else {
+        ) else {
             return GitUpstreamRefreshResult(status: status, remote: nil, remoteRef: nil)
         }
-        let remote = String(decoding: fields[0], as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let remoteRef = String(decoding: fields[1], as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let upstreamRef = String(decoding: fields[2], as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !remote.isEmpty, remote != ".", !remoteRef.isEmpty, !upstreamRef.isEmpty else {
-            return GitUpstreamRefreshResult(status: status, remote: nil, remoteRef: nil)
-        }
-        guard upstreamRef.hasPrefix("refs/remotes/") else {
-            throw GitServiceError.unsupportedUpstreamRef(upstreamRef)
-        }
+        let remote = coordinates.remote
+        let remoteRef = coordinates.remoteRef
+        let upstreamRef = coordinates.upstreamRef
         let currentResult = try await runner.run(
             repository: repository,
             arguments: ["show-ref", "--verify", "--hash", upstreamRef],
@@ -175,6 +159,43 @@ extension GitService {
             expandUntrackedDirectories: expandUntrackedDirectories
         )
         return GitUpstreamRefreshResult(status: status, remote: remote, remoteRef: remoteRef)
+    }
+    func upstreamCoordinates(
+        repository: URL,
+        branch: String,
+        priority: ProcessPriority = .selectedRepository
+    ) async throws -> GitUpstreamCoordinates? {
+        let result = try await runner.run(
+            repository: repository,
+            arguments: [
+                "for-each-ref",
+                "--format=%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)",
+                "--count=1",
+                "refs/heads/\(branch)"
+            ],
+            environment: readEnvironment,
+            outputLimit: 12 * 1_024,
+            priority: priority
+        )
+        let fields = result.standardOutput.split(
+            separator: 0,
+            maxSplits: 2,
+            omittingEmptySubsequences: false
+        )
+        guard fields.count == 3 else { return nil }
+        let remote = String(decoding: fields[0], as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let remoteRef = String(decoding: fields[1], as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let upstreamRef = String(decoding: fields[2], as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !remote.isEmpty, remote != ".", !remoteRef.isEmpty, !upstreamRef.isEmpty else {
+            return nil
+        }
+        guard upstreamRef.hasPrefix("refs/remotes/") else {
+            throw GitServiceError.unsupportedUpstreamRef(upstreamRef)
+        }
+        return GitUpstreamCoordinates(remote: remote, remoteRef: remoteRef, upstreamRef: upstreamRef)
     }
 
     func localStatus(

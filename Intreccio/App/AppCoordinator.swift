@@ -23,6 +23,7 @@ final class AppCoordinator {
     var mutationTask: Task<OperationFailure?, Never>?
     var mutationID: UUID?
     var mutationGeneration: UInt64 = 0
+    var mutationIsBatchPush = false
 
     var isShuttingDown = false
     var mutationAdmissionClosed = false

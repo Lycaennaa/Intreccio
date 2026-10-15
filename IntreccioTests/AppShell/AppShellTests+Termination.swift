@@ -69,7 +69,7 @@ extension AppShellTests {
         XCTAssertEqual(appDelegate.applicationShouldTerminate(NSApp), .terminateLater)
         let sheet = try XCTUnwrap(window.sheets.first)
         let waitButton = try XCTUnwrap(
-            allDescendantViews(in: sheet).compactMap { $0 as? NSButton }
+            allDescendantViews(in: try XCTUnwrap(sheet.contentView)).compactMap { $0 as? NSButton }
                 .first { $0.title == "Wait and Quit" }
         )
         waitButton.performClick(nil)
@@ -113,14 +113,16 @@ extension AppShellTests {
 
         XCTAssertEqual(appDelegate.applicationShouldTerminate(NSApp), .terminateLater)
         let firstSheet = try XCTUnwrap(window.sheets.first)
-        try XCTUnwrap(findButton(titled: "Wait and Quit", in: firstSheet)).performClick(nil)
+        let firstSheetContent = try XCTUnwrap(firstSheet.contentView)
+        try XCTUnwrap(findButton(titled: "Wait and Quit", in: firstSheetContent)).performClick(nil)
         await fulfillment(of: [timeoutReply], timeout: 1)
         XCTAssertEqual(replies, [false])
         XCTAssertTrue(coordinator.mutationAdmissionClosed)
 
         XCTAssertEqual(appDelegate.applicationShouldTerminate(NSApp), .terminateLater)
         let retrySheet = try XCTUnwrap(window.sheets.first)
-        try XCTUnwrap(findButton(titled: "Wait and Quit", in: retrySheet)).performClick(nil)
+        let retrySheetContent = try XCTUnwrap(retrySheet.contentView)
+        try XCTUnwrap(findButton(titled: "Wait and Quit", in: retrySheetContent)).performClick(nil)
         continuation.yield(())
         continuation.finish()
         await fulfillment(of: [retryReply], timeout: 1)

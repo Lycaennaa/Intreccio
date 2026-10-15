@@ -86,7 +86,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         settingsPresenter.prepareForTermination()
         let renderingTask = contentController.cancelRendering()
         let sidebarTasks = contentController.cancelSidebarOperations()
-        let directoryOperation = commandRouter.cancelDirectoryOperationForTermination()
+        let directoryOperation = await commandRouter.cancelDirectoryOperationForTermination()
         let saved = await coordinator.shutdown()
         await renderingTask?.value
         await TaskCompletionDrain.waitForCompletion(sidebarTasks + [directoryOperation].compactMap(\.self))
@@ -137,6 +137,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             contentController.focusRepositoryList()
         }
         contentController.refresh(snapshot)
+        commandRouter.updatePushToOriginToolbar(snapshot)
         settingsPresenter.presentIfPendingAndReady()
     }
 

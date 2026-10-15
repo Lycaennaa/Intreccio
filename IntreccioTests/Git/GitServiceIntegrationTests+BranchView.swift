@@ -216,7 +216,7 @@ extension GitServiceIntegrationTests {
     dirtyMainSelector.configureTransfer(status: sourceStatus, mutationState: .idle)
     await dirtyMainSelector.waitForRefresh()
     XCTAssertFalse(dirtyMainSelector.bringChangesToMainButton.isEnabled)
-    XCTAssertTrue(dirtyMainSelector.bringChangesToMainButton.toolTip.contains("Main worktree has changes"))
+    XCTAssertTrue(dirtyMainSelector.bringChangesToMainButton.toolTip?.contains("Main worktree has changes") == true)
     try runGit(at: fixture.repository, arguments: ["reset", "--hard", "HEAD"])
     let worktreeMenu = try XCTUnwrap(dirtyMainSelector.button.menu)
     dirtyMainSelector.menuWillOpen(worktreeMenu)
@@ -371,10 +371,12 @@ extension GitServiceIntegrationTests {
     }
     button.performClick(nil)
     let cancellationSheet = try XCTUnwrap(window.attachedSheet)
-    try XCTUnwrap(buttons(in: cancellationSheet).first { $0.title == "Cancel" }).performClick(nil)
+    let cancellationContent = try XCTUnwrap(cancellationSheet.contentView)
+    try XCTUnwrap(buttons(in: cancellationContent).first { $0.title == "Cancel" }).performClick(nil)
     button.performClick(nil)
     let confirmationSheet = try XCTUnwrap(window.attachedSheet)
-    try XCTUnwrap(buttons(in: confirmationSheet).first { $0.title == "Transfer to Main" }).performClick(nil)
+    let confirmationContent = try XCTUnwrap(confirmationSheet.contentView)
+    try XCTUnwrap(buttons(in: confirmationContent).first { $0.title == "Transfer to Main" }).performClick(nil)
     return window
   }
 }

@@ -183,6 +183,20 @@ nonisolated struct RepoDescriptor: Sendable, Equatable, Identifiable {
         guard let mainRepositoryURL else { return canonicalURL.lastPathComponent }
         return "\(mainRepositoryURL.lastPathComponent) (\(canonicalURL.lastPathComponent))"
     }
+    static func disambiguatedDisplayNames(for repositories: [RepoDescriptor]) -> [UUID: String] {
+        let repositoriesByDisplayName = Dictionary(grouping: repositories, by: \.displayName)
+        var displayNames = [UUID: String]()
+        displayNames.reserveCapacity(repositories.count)
+        for repository in repositories {
+            let name = repository.displayName
+            let label = (repositoriesByDisplayName[name]?.count ?? 0) > 1
+                ? "\(name) — \(repository.canonicalURL.path)"
+                : name
+            displayNames[repository.id] = label
+        }
+        return displayNames
+    }
+
 
     func withMainRepositoryURL(_ repositoryURL: URL) -> RepoDescriptor {
         RepoDescriptor(

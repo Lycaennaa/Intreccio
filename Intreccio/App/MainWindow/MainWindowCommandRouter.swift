@@ -7,6 +7,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
         static let addSources = NSToolbarItem.Identifier("AddSources")
         static let downloads = NSToolbarItem.Identifier("Downloads")
         static let refreshActions = NSToolbarItem.Identifier("RefreshActions")
+        static let pushToOrigin = NSToolbarItem.Identifier("PushToOrigin")
         static let viewMode = NSToolbarItem.Identifier("ViewMode")
         static let settings = NSToolbarItem.Identifier("Settings")
     }
@@ -18,6 +19,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
     private weak var window: NSWindow?
     private var directoryOperationTask: Task<Void, Never>?
     private var isTerminating = false
+    private let pushToOriginController: PushToOriginToolbarController
 
     init(
         coordinator: AppCoordinator,
@@ -31,6 +33,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
         self.contentController = contentController
         self.settingsPresenter = settingsPresenter
         self.window = window
+        pushToOriginController = PushToOriginToolbarController(coordinator: coordinator, window: window)
     }
 
     func configureToolbar() {
@@ -51,6 +54,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
             .toggleSidebar,
             ToolbarID.addSources,
             ToolbarID.refreshActions,
+            ToolbarID.pushToOrigin,
             ToolbarID.viewMode,
             ToolbarID.downloads,
             ToolbarID.settings
@@ -89,6 +93,8 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
                     ("Rescan All Sources", #selector(rescan(_:)))
                 ]
             )
+        case ToolbarID.pushToOrigin:
+            return pushToOriginController.toolbarItem(identifier: itemIdentifier)
         case ToolbarID.settings:
             return toolbarItem(identifier: itemIdentifier, label: "Settings", image: "gearshape", action: #selector(showSettings(_:)))
         case ToolbarID.viewMode:
@@ -105,6 +111,10 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
         default:
             return nil
         }
+    }
+
+    func updatePushToOriginToolbar(_ snapshot: AppSnapshot) {
+        pushToOriginController.update(snapshot)
     }
 
     @objc func addFolder(_ sender: Any?) {
@@ -220,10 +230,13 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
         }
     }
 
-    func cancelDirectoryOperationForTermination() -> Task<Void, Never>? {
+    func cancelDirectoryOperationForTermination() async -> Task<Void, Never>? {
         isTerminating = true
         directoryOperationTask?.cancel()
-        let tasks = [directoryOperationTask, downloadManager.cancelForTermination()].compactMap(\.self)
+        let downloadTask = downloadManager.cancelForTermination()
+        let pushPreparationTask = pushToOriginController.prepareForTermination()
+        await pushPreparationTask?.value
+        let tasks = [directoryOperationTask, downloadTask].compactMap(\.self)
         switch tasks.count {
         case 0:
             return nil
@@ -245,6 +258,7 @@ final class MainWindowCommandRouter: NSObject, NSToolbarDelegate, NSMenuItemVali
 
     func resumeAfterFailedTermination() {
         isTerminating = false
+        pushToOriginController.resumeAfterFailedTermination()
     }
 
     private func menuToolbarItem(

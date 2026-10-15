@@ -141,7 +141,9 @@ final class GitServicePushTests: XCTestCase {
         let status = try await service.status(repository: scenario.fixture.url)
         XCTAssertEqual(status.pushAccess, .denied)
         XCTAssertEqual(RepositoryRefreshState(status: status).sidebarBadge, "L0")
-        XCTAssertFalse(ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false))
+        XCTAssertFalse(
+            ChangesMutationPolicy.pushControlAvailability(status: status, mutationRunning: false).isAvailable
+        )
 
         do {
             _ = try await service.preparePushTarget(repository: scenario.fixture.url)

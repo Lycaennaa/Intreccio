@@ -301,9 +301,11 @@ extension AppCoordinator {
     }
 
     func cancelSelectedMutation(clearMessage: Bool) {
-        mutationGeneration &+= 1
-        mutationTask?.cancel()
-        mutationState = mutationTask == nil ? .idle : .running
+        if !mutationIsBatchPush {
+            mutationGeneration &+= 1
+            mutationTask?.cancel()
+            mutationState = mutationTask == nil ? .idle : .running
+        }
         if clearMessage {
             amendSession = nil
             commitMessage = ""

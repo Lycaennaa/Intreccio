@@ -29,6 +29,32 @@ extension GitService {
         return target
     }
 
+    func preparePushTarget(repository: URL, status: RepoStatus) async throws -> GitPushTarget {
+        guard let branch = status.branch.head else { throw GitServiceError.detachedHead }
+        guard let coordinates = try await upstreamCoordinates(
+            repository: repository,
+            branch: branch,
+            priority: .selectedRepository
+        ) else {
+            throw GitServiceError.invalidPushDestination(status.branch.upstream ?? "upstream")
+        }
+        let observedUpstream = String(coordinates.upstreamRef.dropFirst("refs/remotes/".count))
+        guard status.branch.upstream == observedUpstream else {
+            throw GitServiceError.pushTargetChanged
+        }
+        let refreshed = GitUpstreamRefreshResult(
+            status: status,
+            remote: coordinates.remote,
+            remoteRef: coordinates.remoteRef
+        )
+        let target = try await makePushTarget(repository: repository, refreshed: refreshed)
+        guard target.remote == "origin" else {
+            throw GitServiceError.invalidPushDestination(target.remote)
+        }
+        try requirePushAccess(status.pushAccess, for: target)
+        return target
+    }
+
     func pushToUpstream(target: GitPushTarget) async throws {
         let repository = RepositoryPathPolicy.canonicalURL(target.repository)
         let refreshed = try await statusWithUpstreamRefresh(
@@ -53,6 +79,7 @@ extension GitService {
         guard status.branch.behind == 0 else { throw GitServiceError.branchBehindUpstream }
         let destination = try await validatedPushDestination(repository: repository, refreshed: refreshed)
         let headObjectID = try await currentHeadObjectID(repository: repository)
+        guard status.branch.objectID == headObjectID else { throw GitServiceError.pushTargetChanged }
         let pushURLs = try await pushURLs(repository: repository, remote: destination.remote)
 
         return GitPushTarget(
@@ -203,6 +230,10 @@ extension GitService {
 
     private func requireAnyPushDestinationAccess(for target: GitPushTarget) async throws {
         let access = try await pushAccess(for: target.pushURLs)
+        try requirePushAccess(access, for: target)
+    }
+
+    private func requirePushAccess(_ access: PushAccess, for target: GitPushTarget) throws {
         let repositories = target.pushURLs.compactMap(GitHubRepositoryURL.webURL(from:))
             .map { String($0.path.dropFirst()) }
             .joined(separator: ", ")
@@ -215,6 +246,7 @@ extension GitService {
             throw GitServiceError.remoteWriteAccessUnavailable(repositories)
         }
     }
+
     private func pushConfiguredDestinations(
         _ target: GitPushTarget,
         repository: URL

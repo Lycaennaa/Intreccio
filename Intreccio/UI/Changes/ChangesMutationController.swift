@@ -152,7 +152,7 @@ final class ChangesMutationController: NSObject {
                 canPush: ChangesMutationPolicy.pushControlAvailability(
                     status: status,
                     mutationRunning: running
-                ),
+                ).isAvailable,
                 pushButtonTitle: "Push \(status?.branch.ahead ?? 0) to \(status?.branch.upstream ?? "Upstream")",
                 rebaseButtonTitle: status?.branch.upstream.map { "Rebase on \($0)" } ?? "Rebase on Upstream",
                 rebaseLabel: rebaseLabel,
@@ -422,7 +422,7 @@ final class ChangesMutationController: NSObject {
               ChangesMutationPolicy.pushControlAvailability(
                   status: context.status,
                   mutationRunning: coordinator.mutationState == .running
-              ) else { return }
+              ).isAvailable else { return }
         guard let window = context.window else {
             reportContextFailure(.windowUnavailable, action: "Push")
             return
