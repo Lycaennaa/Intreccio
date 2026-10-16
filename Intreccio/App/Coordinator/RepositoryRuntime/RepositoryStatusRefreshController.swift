@@ -201,10 +201,10 @@ final class RepositoryStatusRefreshController {
         switch event {
         case .queued(let value, let valueGeneration),
              .running(let value, let valueGeneration),
-             .completed(let value, let valueGeneration, _),
-             .completedWithFailure(let value, let valueGeneration, _, _),
-             .failed(let value, let valueGeneration, _),
-             .cancelled(let value, let valueGeneration):
+             .completed(let value, let valueGeneration, _, _),
+             .completedWithFailure(let value, let valueGeneration, _, _, _),
+             .failed(let value, let valueGeneration, _, _),
+             .cancelled(let value, let valueGeneration, _):
             key = value
             generation = valueGeneration
         }
@@ -221,32 +221,34 @@ final class RepositoryStatusRefreshController {
         case .running:
             state.phase = .running
             historyInvalidated = false
-        case .completed(_, _, let status):
-            let previousBranch = state.status?.branch
+        case .completed(_, _, let status, let upstreamRefreshAttempted):
+            historyInvalidated = shouldInvalidateHistory(
+                previousStatus: state.status,
+                currentStatus: status,
+                upstreamRefreshAttempted: upstreamRefreshAttempted
+            )
             applyStatus(status, to: &state)
             state.phase = .idle
+        case .completedWithFailure(_, _, let status, let failure, let upstreamRefreshAttempted):
             historyInvalidated = shouldInvalidateHistory(
-                previousBranch: previousBranch,
-                currentBranch: status.branch
+                previousStatus: state.status,
+                currentStatus: status,
+                upstreamRefreshAttempted: upstreamRefreshAttempted
             )
-            if historyInvalidated { state.historyGeneration &+= 1 }
-        case .completedWithFailure(_, _, let status, let failure):
-            let previousBranch = state.status?.branch
             applyStatus(status, to: &state)
             state.phase = .failed(failure)
+        case .failed(_, _, let failure, let upstreamRefreshAttempted):
             historyInvalidated = shouldInvalidateHistory(
-                previousBranch: previousBranch,
-                currentBranch: status.branch
+                previousStatus: state.status,
+                currentStatus: nil,
+                upstreamRefreshAttempted: upstreamRefreshAttempted
             )
-            if historyInvalidated { state.historyGeneration &+= 1 }
-        case .failed(_, _, let failure):
             state.phase = .failed(failure)
-            historyInvalidated = state.status == nil
-            if historyInvalidated { state.historyGeneration &+= 1 }
-        case .cancelled:
+        case .cancelled(_, _, let upstreamRefreshAttempted):
             state.phase = .idle
-            historyInvalidated = false
+            historyInvalidated = upstreamRefreshAttempted
         }
+        if historyInvalidated { state.historyGeneration &+= 1 }
         refreshStates = refreshStates.setting(state, for: key.repositoryID)
         return .status(event, historyInvalidated: historyInvalidated)
     }
@@ -270,12 +272,14 @@ final class RepositoryStatusRefreshController {
         state.updateStatus(status, content: content)
     }
     private func shouldInvalidateHistory(
-        previousBranch: BranchStatus?,
-        currentBranch: BranchStatus?
+        previousStatus: RepoStatus?,
+        currentStatus: RepoStatus?,
+        upstreamRefreshAttempted: Bool
     ) -> Bool {
-        guard let currentBranch else { return previousBranch == nil }
-        guard let previousBranch else { return true }
-        return previousBranch != currentBranch
+        guard !upstreamRefreshAttempted else { return true }
+        guard let currentStatus else { return previousStatus == nil }
+        guard let previousStatus else { return true }
+        return previousStatus.branch != currentStatus.branch
     }
 
     func reconcile(with repositories: [RepoDescriptor]) async -> Bool {

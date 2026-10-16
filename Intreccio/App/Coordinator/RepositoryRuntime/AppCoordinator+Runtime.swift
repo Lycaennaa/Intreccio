@@ -35,10 +35,10 @@ extension AppCoordinator: RepositoryRuntimeControllerDelegate {
             switch event {
             case .queued(let key, _),
                  .running(let key, _),
-                 .completed(let key, _, _),
-                 .completedWithFailure(let key, _, _, _),
-                 .failed(let key, _, _),
-                 .cancelled(let key, _):
+                 .completed(let key, _, _, _),
+                 .completedWithFailure(let key, _, _, _, _),
+                 .failed(let key, _, _, _),
+                 .cancelled(let key, _, _):
                 repositoryID = key.repositoryID
             }
             let isSelected = state.uiState.selectedRepoID == repositoryID
@@ -46,20 +46,20 @@ extension AppCoordinator: RepositoryRuntimeControllerDelegate {
             case .queued, .running:
                 if isSelected { _ = selectedSession.beginDiff(state: .loading) }
 
-            case .completed(_, _, let status):
+            case .completed(_, _, let status, _):
                 if isSelected {
                     if state.uiState.mode == .changes { updateDefaultCommitMessage(for: status) }
                     clearSelectedDiff()
                 }
 
-            case .completedWithFailure(_, _, let status, let failure):
+            case .completedWithFailure(_, _, let status, let failure, _):
                 if isSelected {
                     if state.uiState.mode == .changes { updateDefaultCommitMessage(for: status) }
                     clearSelectedDiff()
                     selectedDiffState = .failed(failure)
                 }
 
-            case .failed(_, _, let failure):
+            case .failed(_, _, let failure, _):
                 if isSelected { _ = selectedSession.beginDiff(state: .failed(failure)) }
 
             case .cancelled:

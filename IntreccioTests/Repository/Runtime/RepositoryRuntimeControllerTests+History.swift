@@ -147,6 +147,37 @@ extension RepositoryRuntimeControllerTests {
         XCTAssertEqual(historyInvalidation(in: delegate.changes), true)
     }
 
+    func testUpstreamRefreshInvalidatesHistoryWithoutBranchStatusChange() {
+        let repositoryID = UUID()
+        var state = PersistedState()
+        state.uiState.selectedRepoID = repositoryID
+        state.uiState.mode = .history
+        let repository = makeRuntimeRepository(id: repositoryID, path: "upstream-refresh-history")
+        let delegate = RuntimeTestDelegate(state: state, repositories: [repository])
+        let runtime = RepositoryRuntimeController(gitService: GitService())
+        runtime.delegate = delegate
+        let key = RefreshKey(repositoryID: repositoryID, kind: .status)
+        let branch = BranchStatus(
+            head: "main",
+            objectID: "merged-local-tip",
+            upstream: "origin/main",
+            ahead: 2,
+            behind: 0
+        )
+        let status = RepoStatus(branch: branch)
+
+        runtime.handleRefreshEvent(.completed(key, 1, status))
+        let historyGeneration = runtime.snapshot.refreshStates[repositoryID]?.historyGeneration ?? 0
+        delegate.changes.removeAll()
+        runtime.handleRefreshEvent(
+            .completed(key, 2, status, upstreamRefreshAttempted: true)
+        )
+
+        XCTAssertEqual(runtime.snapshot.refreshStates[repositoryID]?.historyGeneration, historyGeneration + 1)
+        XCTAssertEqual(runtime.snapshot.refreshStates[repositoryID]?.status?.branch, branch)
+        XCTAssertEqual(historyInvalidation(in: delegate.changes), true)
+    }
+
     func testExplicitHistoryInvalidationWorksWhenStatusTipIsUnchanged() {
         let repositoryID = UUID()
         var state = PersistedState()

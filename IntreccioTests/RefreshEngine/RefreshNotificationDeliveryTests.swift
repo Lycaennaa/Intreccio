@@ -27,12 +27,12 @@ private final class RefreshNotificationTestDelegate: RepositoryRuntimeController
     ) {
         if case .status(let event, _) = change {
             switch event {
-            case .completed(let key, let generation, _):
+            case .completed(let key, let generation, _, _):
                 let state = controller.snapshot.refreshStates[key.repositoryID]
                 statusSnapshotsAreCurrent = statusSnapshotsAreCurrent
                     && state?.statusGeneration == generation
                     && state?.phase == .idle
-            case .failed(let key, let generation, _):
+            case .failed(let key, let generation, _, _):
                 let state = controller.snapshot.refreshStates[key.repositoryID]
                 if case .failed = state?.phase {
                     statusSnapshotsAreCurrent = statusSnapshotsAreCurrent
@@ -87,7 +87,7 @@ final class RefreshNotificationDeliveryTests: XCTestCase {
 
         XCTAssertTrue(delegate.changes.contains { change in
             guard case .status(let event, _) = change else { return false }
-            if case .completed(let key, _, _) = event { return key.repositoryID == repository.id }
+            if case .completed(let key, _, _, _) = event { return key.repositoryID == repository.id }
             return false
         })
         XCTAssertTrue(delegate.statusSnapshotsAreCurrent)
@@ -117,7 +117,7 @@ final class RefreshNotificationDeliveryTests: XCTestCase {
 
         XCTAssertTrue(delegate.changes.contains { change in
             guard case .status(let event, _) = change else { return false }
-            if case .failed(let key, _, _) = event { return key.repositoryID == repository.id }
+            if case .failed(let key, _, _, _) = event { return key.repositoryID == repository.id }
             return false
         })
         XCTAssertTrue(delegate.statusSnapshotsAreCurrent)

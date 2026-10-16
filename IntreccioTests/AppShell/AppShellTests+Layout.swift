@@ -318,6 +318,39 @@ extension AppShellTests {
     }
 
     @MainActor
+    func testHistoryCommitRowShowsWhenCommitIsNotOnUpstream() throws {
+        let commit = Commit(
+            objectID: String(repeating: "a", count: 40),
+            parentIDs: [],
+            authorName: "Fixture User",
+            authorEmail: "fixture@example.com",
+            authoredAt: Date(timeIntervalSince1970: 0),
+            subject: "Fixture commit",
+            body: ""
+        )
+        let flaggedRow = HistoryCommitRowView.make(
+            commit: commit,
+            dateFormatter: DateFormatter(),
+            notOnUpstream: true
+        )
+        let rowBackgroundCGColor = try XCTUnwrap(flaggedRow.layer?.backgroundColor)
+        let rowBackground = try XCTUnwrap(
+            NSColor(cgColor: rowBackgroundCGColor)?.usingColorSpace(.deviceRGB)
+        )
+        XCTAssertGreaterThan(rowBackground.redComponent, rowBackground.greenComponent)
+        XCTAssertGreaterThan(rowBackground.greenComponent, rowBackground.blueComponent)
+        XCTAssertEqual(rowBackground.alphaComponent, 0.18, accuracy: 0.01)
+        let visibleText = flaggedRow.subviews.compactMap { $0 as? NSTextField }
+            .map(\.stringValue)
+            .joined(separator: " ")
+        XCTAssertFalse(visibleText.localizedCaseInsensitiveContains("not on upstream"))
+        XCTAssertEqual(flaggedRow.toolTip, commit.subject)
+
+        let regularRow = HistoryCommitRowView.make(commit: commit, dateFormatter: DateFormatter())
+        XCTAssertNil(regularRow.layer?.backgroundColor)
+    }
+
+    @MainActor
     func testHistoryContentSwitchRestoresDiffInspector() throws {
         let directory = try makeTestDirectory()
         let coordinator = AppCoordinator(

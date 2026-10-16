@@ -141,7 +141,7 @@ extension RefreshEngineTests {
                 switch event {
                 case .queued(let key, _) where key.repositoryID == repositoryID:
                     await queuedEvents.record("queued")
-                case .completed(let key, _, _) where key.repositoryID == repositoryID:
+                case .completed(let key, _, _, _) where key.repositoryID == repositoryID:
                     await terminalEvents.record("completed")
                 default:
                     break
@@ -186,7 +186,7 @@ extension RefreshEngineTests {
                 return try await probe.run(request.url.lastPathComponent)
             },
             eventHandler: { event in
-                if case .failed(let key, _, _) = event, key.repositoryID == repositoryID {
+                if case .failed(let key, _, _, _) = event, key.repositoryID == repositoryID {
                     await failureEvents.record("failed")
                 }
             }
@@ -209,6 +209,44 @@ extension RefreshEngineTests {
 
         let failures = await failureEvents.values
         XCTAssertEqual(failures, ["failed"])
+        await scheduler.stop()
+    }
+
+    func testUpstreamRefreshAttemptSurvivesCoalescedStatusReplacement() async throws {
+        let probe = RefreshOperationProbe()
+        let terminalEvents = StringRecorder()
+        let repositoryID = UUID()
+        let scheduler = RefreshScheduler(
+            maximumConcurrent: 1,
+            operation: { request in
+                if request.url.lastPathComponent == "fetch" {
+                    return try await probe.run("fetch")
+                }
+                return RepoStatus()
+            },
+            eventHandler: { event in
+                if case .completed(_, _, _, let upstreamRefreshAttempted) = event {
+                    await terminalEvents.record(upstreamRefreshAttempted ? "upstream" : "ordinary")
+                }
+            }
+        )
+
+        await scheduler.enqueue(
+            repositoryID: repositoryID,
+            url: URL(fileURLWithPath: "/fetch"),
+            refreshUpstream: true
+        )
+        try await waitUntil { await probe.started.contains("fetch") }
+        await scheduler.enqueue(
+            repositoryID: repositoryID,
+            url: URL(fileURLWithPath: "/replacement")
+        )
+
+        await probe.complete("fetch")
+        try await waitUntil { await scheduler.metrics().completedCount == 1 }
+
+        let terminals = await terminalEvents.values
+        XCTAssertEqual(terminals, ["upstream"])
         await scheduler.stop()
     }
 }

@@ -2,11 +2,17 @@ import Darwin
 import Foundation
 
 extension GitService {
-  private static let historyTipOutputLimit = 2 * 1_024
+  static let historyTipOutputLimit = 2 * 1_024
 
   func historyTips(repository: URL, branchReference: String) async throws -> HistoryTips? {
     guard branchReference.hasPrefix("refs/heads/") || branchReference.hasPrefix("refs/remotes/")
     else { return nil }
+    if branchReference.hasPrefix("refs/heads/") {
+      return try await branchHistoryTips(
+        repository: repository,
+        branchReference: branchReference
+      )
+    }
     let result = try await runner.run(
       repository: repository,
       arguments: ["show-ref", "--verify", "--hash", branchReference],
@@ -85,92 +91,10 @@ extension GitService {
       )
     }
 
-    let result: ProcessCommandResult
-    do {
-      result = try await runner.run(
-        repository: repository,
-        arguments: [
-          "for-each-ref",
-          "--format=%(objectname)%00%(upstream)%00%(upstream:objectname)",
-          "--count=1",
-          branchRef
-        ],
-        environment: readEnvironment,
-        outputLimit: Self.historyTipOutputLimit,
-        priority: .selectedRepository
-      )
-    } catch let error as ProcessRunnerError {
-      guard Self.isUnsupportedUpstreamFormat(error) else { throw error }
-      return try await compatibleHistoryTips(repository: repository, branchRef: branchRef)
-    }
-    let fields = result.standardOutput.split(
-      separator: 0,
-      maxSplits: 2,
-      omittingEmptySubsequences: false
-    )
-    guard fields.count == 3 else {
-      return HistoryTips(localObjectID: nil, upstreamObjectID: nil)
-    }
-
-    let localObjectID = String(decoding: fields[0], as: UTF8.self)
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    let upstreamRef = String(decoding: fields[1], as: UTF8.self)
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    let upstreamObjectID = String(decoding: fields[2], as: UTF8.self)
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    return HistoryTips(
-      localObjectID: localObjectID.isEmpty ? nil : localObjectID,
-      upstreamObjectID: upstreamRef.hasPrefix("refs/remotes/") && !upstreamObjectID.isEmpty
-        ? upstreamObjectID
-        : nil
-    )
-  }
-
-  private func compatibleHistoryTips(repository: URL, branchRef: String) async throws -> HistoryTips {
-    let localObjectID = try await headObjectID(repository: repository)
-    let branchName = String(branchRef.dropFirst("refs/heads/".count))
-    let upstreamRefResult = try await runner.run(
+    return try await branchHistoryTips(
       repository: repository,
-      arguments: [
-        "rev-parse", "--symbolic-full-name", "--verify", "\(branchName)@{upstream}"
-      ],
-      environment: readEnvironment,
-      acceptedExitCodes: [0, 1, 128],
-      outputLimit: Self.historyTipOutputLimit,
-      priority: .selectedRepository
-    )
-    guard upstreamRefResult.exitCode == 0 else {
-      return HistoryTips(localObjectID: localObjectID, upstreamObjectID: nil)
-    }
-    let upstreamRef = String(decoding: upstreamRefResult.standardOutput, as: UTF8.self)
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    guard upstreamRef.hasPrefix("refs/remotes/") else {
-      return HistoryTips(localObjectID: localObjectID, upstreamObjectID: nil)
-    }
-    let upstreamObjectResult = try await runner.run(
-      repository: repository,
-      arguments: ["show-ref", "--verify", "--hash", upstreamRef],
-      environment: readEnvironment,
-      acceptedExitCodes: [0, 1, 128],
-      outputLimit: Self.historyTipOutputLimit,
-      priority: .selectedRepository
-    )
-    guard upstreamObjectResult.exitCode == 0 else {
-      return HistoryTips(localObjectID: localObjectID, upstreamObjectID: nil)
-    }
-    let upstreamObjectID = String(decoding: upstreamObjectResult.standardOutput, as: UTF8.self)
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    return HistoryTips(
-      localObjectID: localObjectID,
-      upstreamObjectID: upstreamObjectID.isEmpty ? nil : upstreamObjectID
-    )
-  }
-
-  private static func isUnsupportedUpstreamFormat(_ error: ProcessRunnerError) -> Bool {
-    guard case .nonZeroExit(let result) = error else { return false }
-    let message = result.standardErrorText
-    return message.contains("unrecognized %(upstream)")
-      || (message.contains("unknown") && message.contains("%(upstream)"))
+      branchReference: branchRef
+    ) ?? HistoryTips(localObjectID: nil, upstreamObjectID: nil)
   }
 
   func history(
@@ -188,42 +112,17 @@ extension GitService {
     tips: HistoryTips,
     skip: Int = 0
   ) async throws -> HistoryMetadataPage {
-    let revisions: [String]
-    switch scope {
-    case .mixed:
-      revisions = tips.localObjectID.map { [$0] } ?? []
-    case .local:
-      guard let localObjectID = tips.localObjectID else { return .empty }
-      revisions =
-        if let upstreamObjectID = tips.upstreamObjectID {
-          [localObjectID, "--not", upstreamObjectID]
-        } else {
-          [localObjectID]
-        }
-    case .upstream:
-      revisions = tips.upstreamObjectID.map { [$0] } ?? []
-    case .unmergedUpstream:
-      guard let upstreamObjectID = tips.upstreamObjectID else { return .empty }
-      revisions =
-        if let localObjectID = tips.localObjectID {
-          [upstreamObjectID, "--not", localObjectID]
-        } else {
-          [upstreamObjectID]
-        }
-    }
-    guard !revisions.isEmpty else { return .empty }
-    let safeSkip = max(0, skip)
+    guard let revisions = Self.historyRevisions(scope: scope, tips: tips) else { return .empty }
     let result = try await runner.run(
       repository: repository,
       arguments: [
-        "log", "--skip=\(safeSkip)", "-n", String(Self.historyPageSize),
+        "log", "--skip=\(max(0, skip))", "-n", String(Self.historyPageSize),
         "--format=\(CommitParser.format)"
       ] + revisions,
       environment: readEnvironment,
       outputLimit: Self.historyTipOutputLimit,
       priority: .selectedRepository
     )
-
     let objectIDs = Self.parseHistoryObjectIDs(result.standardOutput)
     guard !objectIDs.isEmpty else {
       guard result.standardOutput.isEmpty else {
@@ -231,6 +130,45 @@ extension GitService {
       }
       return .empty
     }
+    let metadataPage = try await fetchHistoryMetadataPage(
+      repository: repository,
+      objectIDs: objectIDs
+    )
+    let notOnUpstreamObjectIDs = try await historyStatusObjectIDs(
+      repository: repository,
+      scope: scope,
+      tips: tips,
+      skip: skip,
+      commits: metadataPage.commits
+    )
+    return HistoryMetadataPage(
+      commits: metadataPage.commits,
+      completeness: metadataPage.completeness,
+      omittedCommitCount: metadataPage.omittedCommitCount,
+      unavailableCommitCount: metadataPage.unavailableCommitCount,
+      notOnUpstreamObjectIDs: notOnUpstreamObjectIDs
+    )
+  }
+
+  private static func historyRevisions(scope: HistoryScope, tips: HistoryTips) -> [String]? {
+    switch scope {
+    case .mixed:
+      return tips.localObjectID.map { [$0] }
+    case .local:
+      guard let localObjectID = tips.localObjectID else { return nil }
+      return tips.upstreamObjectID.map { [localObjectID, "--not", $0] } ?? [localObjectID]
+    case .upstream:
+      return tips.upstreamObjectID.map { [$0] }
+    case .unmergedUpstream:
+      guard let upstreamObjectID = tips.upstreamObjectID else { return nil }
+      return tips.localObjectID.map { [upstreamObjectID, "--not", $0] } ?? [upstreamObjectID]
+    }
+  }
+
+  private func fetchHistoryMetadataPage(
+    repository: URL,
+    objectIDs: [String]
+  ) async throws -> HistoryMetadataPage {
     let input = Data((objectIDs.map { $0 + "\n" }.joined()).utf8)
     let metadataResult: ProcessCommandResult
     let transportCompleteness: GitOutputCompleteness
@@ -261,7 +199,8 @@ extension GitService {
       commits: parsed.commits,
       completeness: parsed.completeness,
       omittedCommitCount: parsed.omittedCommitCount,
-      unavailableCommitCount: parsed.unavailableCommitCount
+      unavailableCommitCount: parsed.unavailableCommitCount,
+      notOnUpstreamObjectIDs: nil
     )
   }
 
@@ -442,14 +381,12 @@ extension GitService {
     }
   }
 
-  nonisolated private static func parseHistoryObjectIDs(_ data: Data) -> [String] {
-    let fields = splitNULRecords(data)
-    let candidates =
-      fields.isEmpty
-      ? String(decoding: data, as: UTF8.self).split(whereSeparator: \.isWhitespace).map(String.init)
-      : fields.map {
-        String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-      }
+  nonisolated static func parseHistoryObjectIDs(_ data: Data) -> [String] {
+    let candidates = splitNULRecords(data).flatMap { record in
+      String(decoding: record, as: UTF8.self)
+        .split(whereSeparator: \.isWhitespace)
+        .map(String.init)
+    }
     return candidates.filter { value in
       (value.count == 40 || value.count == 64) && value.allSatisfy(\.isHexDigit)
     }

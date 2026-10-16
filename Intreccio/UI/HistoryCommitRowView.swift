@@ -1,15 +1,24 @@
 import AppKit
 
 enum HistoryCommitRowView {
-  static func make(commit: Commit, dateFormatter: DateFormatter) -> NSView {
+  static func make(
+    commit: Commit,
+    dateFormatter: DateFormatter,
+    notOnUpstream: Bool = false
+  ) -> NSView {
     let cell = NSTableCellView()
+    if notOnUpstream {
+      cell.wantsLayer = true
+      cell.layer?.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.18).cgColor
+    }
     let subject = NSTextField(labelWithString: commit.subject.isEmpty ? "(no subject)" : commit.subject)
-    let metadataText = [
-      commit.authorName,
-      String(commit.objectID.prefix(8)),
-      dateFormatter.string(from: commit.authoredAt)
-    ].joined(separator: "   ")
-    let metadata = NSTextField(labelWithString: metadataText)
+    let metadata = NSTextField(
+      labelWithString: [
+        commit.authorName,
+        String(commit.objectID.prefix(8)),
+        dateFormatter.string(from: commit.authoredAt)
+      ].joined(separator: "   ")
+    )
     subject.lineBreakMode = .byTruncatingTail
     metadata.lineBreakMode = .byTruncatingTail
     metadata.font = .preferredFont(forTextStyle: .caption2)

@@ -77,12 +77,55 @@ extension GitServiceIntegrationTests {
             tips: tips
         )
 
+        let mixedPage = try await service.historyPage(
+            repository: fixture.url,
+            scope: .mixed,
+            tips: tips
+        )
+        let localObjectID = try XCTUnwrap(tips.localObjectID)
+        let baseObjectID = try XCTUnwrap(
+            String(
+                bytes: try fixture.git("rev-parse", "HEAD^").standardOutput,
+                encoding: .utf8
+            )?.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        let branchTips = try await service.historyTips(
+            repository: fixture.url,
+            branchReference: "refs/heads/main"
+        )
+
+        XCTAssertEqual(mixedPage.commits.map(\.subject), mixed.map(\.subject))
+        XCTAssertEqual(mixedPage.notOnUpstreamObjectIDs, Set([localObjectID]))
+        XCTAssertFalse(mixedPage.notOnUpstreamObjectIDs?.contains(baseObjectID) ?? true)
+        XCTAssertEqual(branchTips, tips)
         XCTAssertNotNil(tips.localObjectID)
         XCTAssertEqual(tips.upstreamObjectID, upstreamObjectID)
         XCTAssertEqual(mixed.map(\.subject), ["local change", "base"])
         XCTAssertEqual(local.map(\.subject), ["local change"])
         XCTAssertEqual(upstream.map(\.subject), ["upstream change", "base"])
         XCTAssertEqual(unmergedUpstream.map(\.subject), ["upstream change"])
+    }
+
+    func testBranchHistoryTipsRejectsSlashDescendantRefMatch() async throws {
+        let fixture = try GitFixture(testCase: self)
+        try fixture.write("child\n", to: "child.txt")
+        try fixture.git("add", "--", "child.txt")
+        try fixture.git("commit", "-m", "child branch")
+        try fixture.git("update-ref", "refs/heads/topic/child", "HEAD")
+
+        let matchingRef = try fixture.git(
+            "for-each-ref",
+            "--format=%(refname)",
+            "--count=1",
+            "refs/heads/topic"
+        ).standardOutputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertEqual(matchingRef, "refs/heads/topic/child")
+
+        let tips = try await GitService().historyTips(
+            repository: fixture.url,
+            branchReference: "refs/heads/topic"
+        )
+        XCTAssertNil(tips)
     }
 
     func testCommitPatchLineFallbackRetainsChangedFiles() async throws {

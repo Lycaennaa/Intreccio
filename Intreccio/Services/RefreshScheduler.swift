@@ -32,10 +32,16 @@ nonisolated struct RefreshKey: Sendable, Hashable {
 nonisolated enum RefreshSchedulerEvent: Sendable, Equatable {
     case queued(RefreshKey, UInt64)
     case running(RefreshKey, UInt64)
-    case completed(RefreshKey, UInt64, RepoStatus)
-    case completedWithFailure(RefreshKey, UInt64, RepoStatus, OperationFailure)
-    case failed(RefreshKey, UInt64, OperationFailure)
-    case cancelled(RefreshKey, UInt64)
+    case completed(
+        RefreshKey, UInt64, RepoStatus, upstreamRefreshAttempted: Bool = false
+    )
+    case completedWithFailure(
+        RefreshKey, UInt64, RepoStatus, OperationFailure, upstreamRefreshAttempted: Bool = false
+    )
+    case failed(
+        RefreshKey, UInt64, OperationFailure, upstreamRefreshAttempted: Bool = false
+    )
+    case cancelled(RefreshKey, UInt64, upstreamRefreshAttempted: Bool = false)
 }
 
 nonisolated struct RefreshSchedulerMetrics: Sendable, Equatable {
@@ -57,6 +63,7 @@ actor RefreshScheduler {
         let order: UInt64
         let enqueuedAt: ContinuousClock.Instant
         let refreshUpstream: Bool
+        var upstreamRefreshAttempted: Bool
         let includeDiffStats: Bool
         let requestKind: RefreshRequestKind
 
@@ -70,6 +77,7 @@ actor RefreshScheduler {
         let task: Task<Void, Never>
         let startedAt: ContinuousClock.Instant
         let refreshUpstream: Bool
+        let upstreamRefreshAttempted: Bool
     }
 
     static let maximumPending = 128
@@ -135,6 +143,10 @@ actor RefreshScheduler {
         let pendingUpstreamRefresh = refreshUpstream
             || pending[key]?.refreshUpstream == true
             || replacements[key]?.refreshUpstream == true
+        let upstreamRefreshAttempted = refreshUpstream
+            || pending[key]?.upstreamRefreshAttempted == true
+            || replacements[key]?.upstreamRefreshAttempted == true
+            || running[key]?.upstreamRefreshAttempted == true
         let isLocalFileChange = requestKind == .localFileChange && !refreshUpstream
         let effectiveRequestKind: RefreshRequestKind
         if isLocalFileChange, let queuedRequest {
@@ -156,6 +168,7 @@ actor RefreshScheduler {
             order: order,
             enqueuedAt: clock.now,
             refreshUpstream: requestRefreshUpstream,
+            upstreamRefreshAttempted: upstreamRefreshAttempted,
             includeDiffStats: includeDiffStats,
             requestKind: effectiveRequestKind
         )
@@ -214,7 +227,11 @@ actor RefreshScheduler {
             queuedNotificationKeys.remove(key)
             preservedFailures[key] = nil
             running[key]?.task.cancel()
-            await eventHandler(.cancelled(key, generation))
+            await eventHandler(.cancelled(
+                key,
+                generation,
+                upstreamRefreshAttempted: running[key]?.upstreamRefreshAttempted ?? false
+            ))
             if running[key] == nil { generations[key] = nil }
         }
         pump()
@@ -232,7 +249,11 @@ actor RefreshScheduler {
             let generation = nextGeneration
             generations[key] = generation
             running[key]?.task.cancel()
-            await eventHandler(.cancelled(key, generation))
+            await eventHandler(.cancelled(
+                key,
+                generation,
+                upstreamRefreshAttempted: running[key]?.upstreamRefreshAttempted ?? false
+            ))
         }
         guard !running.isEmpty else { return }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -265,7 +286,8 @@ actor RefreshScheduler {
             generation: request.generation,
             task: task,
             startedAt: startedAt,
-            refreshUpstream: request.refreshUpstream
+            refreshUpstream: request.refreshUpstream,
+            upstreamRefreshAttempted: request.upstreamRefreshAttempted
         )
         performance.maximumConcurrentObserved = max(performance.maximumConcurrentObserved, running.count)
     }
@@ -290,7 +312,9 @@ actor RefreshScheduler {
         guard let runningRequest = running[request.key], runningRequest.generation == request.generation else { return }
         performance.totalRunTime += runningRequest.startedAt.duration(to: clock.now)
         running[request.key] = nil
-        if !isStopped, let replacement = replacements.removeValue(forKey: request.key) {
+        if !isStopped, var replacement = replacements.removeValue(forKey: request.key) {
+            replacement.upstreamRefreshAttempted =
+                replacement.upstreamRefreshAttempted || runningRequest.upstreamRefreshAttempted
             if runningRequest.refreshUpstream,
                !replacement.refreshUpstream,
                case .failure(let error) = result,
@@ -324,7 +348,11 @@ actor RefreshScheduler {
         if Task.isCancelled {
             preservedFailures[request.key] = nil
             performance.cancelledCount += 1
-            await eventHandler(.cancelled(request.key, request.generation))
+            await eventHandler(.cancelled(
+                request.key,
+                request.generation,
+                upstreamRefreshAttempted: request.upstreamRefreshAttempted
+            ))
         } else {
             switch result {
             case .success(let status):
@@ -335,16 +363,26 @@ actor RefreshScheduler {
                         request.key,
                         request.generation,
                         status,
-                        preservedFailure
+                        preservedFailure,
+                        upstreamRefreshAttempted: true
                     ))
                 } else {
-                    await eventHandler(.completed(request.key, request.generation, status))
+                    await eventHandler(.completed(
+                        request.key,
+                        request.generation,
+                        status,
+                        upstreamRefreshAttempted: request.upstreamRefreshAttempted
+                    ))
                 }
             case .failure(let error):
                 if isCancellation(error) {
                     preservedFailures[request.key] = nil
                     performance.cancelledCount += 1
-                    await eventHandler(.cancelled(request.key, request.generation))
+                    await eventHandler(.cancelled(
+                        request.key,
+                        request.generation,
+                        upstreamRefreshAttempted: request.upstreamRefreshAttempted
+                    ))
                 } else {
                     let failure = OperationFailure.git(error, title: "Could not refresh repository status")
                     preservedFailures[request.key] = request.refreshUpstream ? failure : nil
@@ -352,7 +390,8 @@ actor RefreshScheduler {
                     await eventHandler(.failed(
                         request.key,
                         request.generation,
-                        failure
+                        failure,
+                        upstreamRefreshAttempted: request.upstreamRefreshAttempted
                     ))
                 }
             }

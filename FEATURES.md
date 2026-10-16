@@ -19,7 +19,7 @@ This list covers features in the current app. Intreccio uses the Git installatio
 
 ## History and Git workflows
 - Browse Mixed, Local, Upstream, and Unmerged Upstream history.
-- Filter loaded commits by subject, author, or hash; inspect commit details and diffs.
+- Filter loaded commits by subject, author, or hash; mark commits absent from the configured upstream (based on the last fetched remote state); inspect commit details and diffs.
 - Stash all changes and restore the latest stash.
 - Fetch configured upstreams, push the current branch to its configured upstream, and rebase on that upstream. Push is disabled for diverged branches and never force-pushes.
 

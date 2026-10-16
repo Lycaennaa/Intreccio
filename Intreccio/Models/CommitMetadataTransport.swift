@@ -12,12 +12,14 @@ nonisolated struct HistoryMetadataPage: Sendable, Equatable {
     let completeness: MetadataCompleteness
     let omittedCommitCount: Int?
     let unavailableCommitCount: Int
+    let notOnUpstreamObjectIDs: Set<String>?
 
     static let empty = HistoryMetadataPage(
         commits: [],
         completeness: .complete,
         omittedCommitCount: 0,
-        unavailableCommitCount: 0
+        unavailableCommitCount: 0,
+        notOnUpstreamObjectIDs: nil
     )
 }
 nonisolated enum CommitBatchParser {

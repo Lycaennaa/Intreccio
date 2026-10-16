@@ -83,17 +83,28 @@ extension AppCoordinator {
       let selectedBranch = identity.branchRef.flatMap { branchRef in
         branches.first { $0.refName == branchRef }
       }
-      let branchTipChanged = selectedBranch.map { branch in
-        guard let loadedTip = selectedHistoryState.tips?.localObjectID else {
-          return selectedSession.hasHistoryTask
-        }
-        return branch.objectID != loadedTip
-      } ?? false
-      if identity.branchRef != nil, selectedBranch == nil {
+      let selectedTips: HistoryTips?
+      if let branchRef = identity.branchRef {
+        selectedTips = try await gitService.historyTips(
+          repository: identity.repositoryURL,
+          branchReference: branchRef
+        )
+      } else {
+        selectedTips = try await gitService.historyTips(repository: identity.repositoryURL)
+      }
+      try Task.checkCancellation()
+      guard isCurrentHistoryRequestIdentity(identity), repositoryPathMatches(identity) else { return }
+      let branchTipsChanged: Bool
+      if let selectedTips, let loadedTips = selectedHistoryState.tips {
+        branchTipsChanged = selectedTips != loadedTips
+      } else {
+        branchTipsChanged = selectedHistoryState.tips == nil && selectedSession.hasHistoryTask
+      }
+      if identity.branchRef != nil, selectedBranch == nil || selectedTips == nil {
         clearSelectedHistory(preservingBranchSelection: false)
         selectedHistoryState.branches = branches
         loadNextHistoryPage()
-      } else if branchTipChanged {
+      } else if branchTipsChanged {
         clearSelectedHistory()
         selectedHistoryState.branches = branches
         loadNextHistoryPage()
@@ -194,9 +205,6 @@ extension AppCoordinator {
     _ request: HistoryPageRequest,
     branches: [GitBranchReference]?
   ) async throws -> HistoryPageFetchResult {
-    let branch = request.identity.branchRef.flatMap { reference in
-      branches?.first { $0.refName == reference }
-    }
     if let branchRef = request.identity.branchRef,
       let branches,
       !branches.contains(where: { $0.refName == branchRef }) {
@@ -205,15 +213,14 @@ extension AppCoordinator {
     let tips: HistoryTips
     if let knownTips = request.knownTips {
       tips = knownTips
-    } else if let branch {
-      tips = HistoryTips(localObjectID: branch.objectID, upstreamObjectID: nil)
     } else if let branchRef = request.identity.branchRef {
       guard let branchTips = try await gitService.historyTips(
         repository: request.identity.repositoryURL,
         branchReference: branchRef
       ) else {
-        let branches = branches ?? selectedHistoryState.branches.filter { $0.refName != branchRef }
-        return .branchMissing(branches)
+        let availableBranches =
+          branches ?? selectedHistoryState.branches.filter { $0.refName != branchRef }
+        return .branchMissing(availableBranches)
       }
       tips = branchTips
     } else {
@@ -304,6 +311,10 @@ extension AppCoordinator {
 
   private func applyHistoryPage(_ page: HistoryMetadataPage, skip: Int) {
     selectedHistoryState.metadataCompleteness = page.completeness
+    if let notOnUpstreamObjectIDs = page.notOnUpstreamObjectIDs {
+      selectedHistoryState.notOnUpstreamObjectIDs =
+        (selectedHistoryState.notOnUpstreamObjectIDs ?? []).union(notOnUpstreamObjectIDs)
+    }
     if skip >= SelectedHistoryState.maximumLoadedCommits {
       selectedHistoryState.reachedEnd = page.completeness.isComplete && page.commits.isEmpty
       selectedHistoryState.reachedLimit = !page.commits.isEmpty || !page.completeness.isComplete

@@ -313,11 +313,6 @@ final class HistoryViewController: NSViewController,
     commits.count
   }
 
-  func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-    if row >= commits.count - 3 { requestNextHistoryPageIfNeeded() }
-    return HistoryCommitRowView.make(commit: commits[row], dateFormatter: Self.dateFormatter)
-  }
-
   func tableViewSelectionDidChange(_ notification: Notification) {
     guard !suppressSelectionChange else { return }
     coordinator.selectCommit(selectedCommit)
@@ -378,6 +373,22 @@ final class HistoryViewController: NSViewController,
     formatter.timeStyle = .short
     return formatter
   }()
+}
+
+extension HistoryViewController {
+  func tableView(
+    _ tableView: NSTableView,
+    viewFor tableColumn: NSTableColumn?,
+    row: Int
+  ) -> NSView? {
+    if row >= commits.count - 3 { requestNextHistoryPageIfNeeded() }
+    let commit = commits[row]
+    return HistoryCommitRowView.make(
+      commit: commit,
+      dateFormatter: Self.dateFormatter,
+      notOnUpstream: renderedHistory?.notOnUpstreamObjectIDs?.contains(commit.objectID) == true
+    )
+  }
 }
 private extension HistoryViewController {
   func showListState(_ message: String) {

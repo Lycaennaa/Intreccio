@@ -156,6 +156,7 @@ nonisolated struct SelectedHistoryState: Sendable, Equatable {
 
   var scope: HistoryScope = .mixed
   var commits: [Commit] = []
+  var notOnUpstreamObjectIDs: Set<String>?
   var tips: HistoryTips?
   var phase: HistoryLoadPhase = .idle
   var reachedEnd = false
