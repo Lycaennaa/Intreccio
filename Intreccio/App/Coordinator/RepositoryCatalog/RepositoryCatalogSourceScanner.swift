@@ -9,6 +9,10 @@ nonisolated enum RepositoryCatalogScanError: Error, Sendable, Equatable, CustomS
             "Catalog scan exceeded remaining catalog capacity of \(limit) repository entries."
         }
     }
+
+    static func validateCandidateCount(_ count: Int, limit: Int) throws {
+        guard count <= limit else { throw candidateBudgetExceeded(limit: limit) }
+    }
 }
 
 @MainActor
@@ -135,10 +139,12 @@ final class RepositoryCatalogSourceScanner {
     ) throws {
         guard let candidateLimit,
               case .success(_, let result) = outcome else { return }
-        guard result.repositories.count <= candidateLimit - candidateCount else {
-            throw RepositoryCatalogScanError.candidateBudgetExceeded(limit: candidateLimit)
-        }
-        candidateCount += result.repositories.count
+        let additionalCandidates = result.repositories.count
+        try RepositoryCatalogScanError.validateCandidateCount(
+            candidateCount + additionalCandidates,
+            limit: candidateLimit
+        )
+        candidateCount += additionalCandidates
     }
 
     private static func scanWatchRoot(

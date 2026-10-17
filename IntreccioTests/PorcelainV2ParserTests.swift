@@ -69,6 +69,58 @@ final class PorcelainV2ParserTests: XCTestCase {
         XCTAssertEqual(state.sidebarBadge, "L2")
         XCTAssertNil(RepositoryRefreshState().sidebarBadge)
     }
+
+    func testSubmoduleActivitySeparatesChangesAheadAndParentCommitDifference() throws {
+        let childStatus = try PorcelainV2Parser.parse(Data((
+            "# branch.upstream origin/main\0" +
+            "# branch.ab +2 -3\0" +
+            "? local.txt\0"
+        ).utf8))
+        let parentStatus = try PorcelainV2Parser.parse(Data(
+            "1 .M SC.. 160000 160000 160000 abc def modules/child\0".utf8
+        ))
+        let activity = RepositorySubmoduleActivity(
+            childState: RepositoryRefreshState(status: childStatus),
+            parentState: RepositoryRefreshState(status: parentStatus),
+            submodulePath: "modules/child"
+        )
+
+        XCTAssertEqual(activity.workingTreeChangeCount, 1)
+        XCTAssertEqual(activity.aheadCommitCount, 2)
+        XCTAssertEqual(activity.behindCommitCount, 3)
+        XCTAssertTrue(activity.parentCommitDiffers)
+        XCTAssertTrue(activity.hasActivity)
+        XCTAssertEqual(
+            activity.sidebarBadge,
+            "Changes 1 · Ahead 2 · Behind 3 · Parent commit differs"
+        )
+
+        let noUpstream = try PorcelainV2Parser.parse(Data("# branch.ab +5 -0\0".utf8))
+        let untrackedAhead = RepositorySubmoduleActivity(
+            childState: RepositoryRefreshState(status: noUpstream),
+            parentState: nil,
+            submodulePath: nil
+        )
+        XCTAssertEqual(untrackedAhead.aheadCommitCount, 0)
+        XCTAssertFalse(untrackedAhead.hasActivity)
+
+        var stagedPointer = RepoStatus()
+        stagedPointer.changes = [FileChange(
+            path: "modules/child",
+            originalPath: nil,
+            indexState: .modified,
+            worktreeState: .unmodified,
+            kind: .ordinary,
+            submoduleState: "S..."
+        )]
+        let stagedActivity = RepositorySubmoduleActivity(
+            childState: nil,
+            parentState: RepositoryRefreshState(status: stagedPointer),
+            submodulePath: "modules/child"
+        )
+        XCTAssertTrue(stagedActivity.parentCommitDiffers)
+        XCTAssertEqual(stagedActivity.sidebarBadge, "Parent commit differs")
+    }
     func testPreservesInvalidPathBytesAndDoesNotUseReplacementAsIdentity() throws {
         let prefix = Data("1 .M N... 100644 100644 100644 abc def ".utf8)
         var input = prefix

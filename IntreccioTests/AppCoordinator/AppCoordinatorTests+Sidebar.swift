@@ -359,7 +359,7 @@ extension AppCoordinatorTests {
         window.contentView?.layoutSubtreeIfNeeded()
 
         let outlineView = try XCTUnwrap(findOutlineView(in: controller.view))
-        XCTAssertEqual(outlineView.indentationPerLevel, 0)
+        XCTAssertEqual(outlineView.indentationPerLevel, 14)
         let rootCell = try XCTUnwrap(outlineView.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTableCellView)
         let folderIcon = rootCell.subviews
             .compactMap { $0 as? NSStackView }

@@ -105,7 +105,16 @@ final class RepositoryCatalogSourceMutationOperations {
         }) {
             return .selectedRepository(existing.id)
         }
+        let candidateLimit = try PersistedCatalogBudget.remainingCandidateCapacity(
+            for: state,
+            additionalSourceCount: 1
+        )
         let gitDirectoryInfo = await sourceResolver.inspectGitDirectory(at: root)
+        let submodules = try await sourceResolver.scanner.scanInitializedSubmodules(of: root)
+        try RepositoryCatalogScanError.validateCandidateCount(
+            1 + submodules.repositories.count,
+            limit: candidateLimit
+        )
         guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
         let bookmark = try await bookmarkStore.create(for: root)
         let source = StandaloneRepository(
@@ -120,11 +129,17 @@ final class RepositoryCatalogSourceMutationOperations {
         var standaloneRepositories = self.standaloneRepositories
         standaloneRepositories[source.id] = StandaloneRepositoryLocation(
             url: root,
-            gitDirectoryInfo: gitDirectoryInfo
+            gitDirectoryInfo: gitDirectoryInfo,
+            submoduleRepositories: submodules.repositories,
+            hasSubmodules: submodules.hasConfiguredSubmodules,
+            submoduleScanIncomplete: submodules.isIncomplete
         )
+        var messages = scanMessages
+        messages[source.id] = RepositoryCatalogSubmoduleDiagnostic.message(for: submodules)
         let change = catalogState.makeChange(
             state: proposed,
             standaloneRepositories: standaloneRepositories,
+            scanMessages: messages,
             effect: .sourceAdded()
         )
         return .changed(CatalogTransaction(change: change, persistenceOrder: .beforeAcceptance))
@@ -251,6 +266,7 @@ final class RepositoryCatalogSourceMutationOperations {
         guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
         var proposed = state
         var standaloneRepositories = self.standaloneRepositories
+        var messages = scanMessages
         if let index = proposed.watchRoots.firstIndex(where: { $0.id == sourceID }) {
             proposed.watchRoots[index].bookmarkData = bookmark
             proposed.watchRoots[index].lastResolvedPath = url.path
@@ -265,7 +281,13 @@ final class RepositoryCatalogSourceMutationOperations {
             guard repositoryRoot == url else {
                 throw CoordinatorError.invalidRepository("Select the repository top-level folder.")
             }
+            let candidateLimit = try PersistedCatalogBudget.remainingCandidateCapacity(for: state)
             let gitDirectoryInfo = await sourceResolver.inspectGitDirectory(at: repositoryRoot)
+            let submodules = try await sourceResolver.scanner.scanInitializedSubmodules(of: repositoryRoot)
+            try RepositoryCatalogScanError.validateCandidateCount(
+                1 + submodules.repositories.count,
+                limit: candidateLimit
+            )
             guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
             proposed.standaloneRepos[index].bookmarkData = bookmark
             proposed.standaloneRepos[index].lastResolvedPath = url.path
@@ -273,8 +295,12 @@ final class RepositoryCatalogSourceMutationOperations {
             proposed.standaloneRepos[index].resourceID = ResourceIdentity.read(from: url)
             standaloneRepositories[sourceID] = StandaloneRepositoryLocation(
                 url: repositoryRoot,
-                gitDirectoryInfo: gitDirectoryInfo
+                gitDirectoryInfo: gitDirectoryInfo,
+                submoduleRepositories: submodules.repositories,
+                hasSubmodules: submodules.hasConfiguredSubmodules,
+                submoduleScanIncomplete: submodules.isIncomplete
             )
+            messages[sourceID] = RepositoryCatalogSubmoduleDiagnostic.message(for: submodules)
         } else {
             return .noChange
         }
@@ -282,6 +308,7 @@ final class RepositoryCatalogSourceMutationOperations {
         let change = catalogState.makeChange(
             state: proposed,
             standaloneRepositories: standaloneRepositories,
+            scanMessages: messages,
             effect: .sourceReauthorized
         )
         return .changed(CatalogTransaction(change: change, persistenceOrder: .beforeAcceptance))

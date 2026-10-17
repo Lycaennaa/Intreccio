@@ -13,7 +13,12 @@ nonisolated struct RepositorySourceScanError: Error, Sendable, CustomStringConve
 }
 
 nonisolated enum RepositoryStandaloneResolution: Sendable {
-    case resolved(source: StandaloneRepository, root: URL, gitDirectoryInfo: GitDirectoryInfo?)
+    case resolved(
+        source: StandaloneRepository,
+        root: URL,
+        gitDirectoryInfo: GitDirectoryInfo?,
+        submodules: ScannedSubmodules
+    )
     case repositoryUnavailable(source: StandaloneRepository, message: String)
     case accessUnavailable(source: StandaloneRepository, message: String)
 }
@@ -61,7 +66,13 @@ final class RepositorySourceResolver {
         return .success(source: updated, result: result)
     }
 
-    func resolveStandalone(_ source: StandaloneRepository) async throws -> RepositoryStandaloneResolution {
+    func resolveStandalone(
+        _ source: StandaloneRepository,
+        maximumRepositoryCandidates: Int? = nil
+    ) async throws -> RepositoryStandaloneResolution {
+        if let maximumRepositoryCandidates {
+            try RepositoryCatalogScanError.validateCandidateCount(0, limit: maximumRepositoryCandidates)
+        }
         let resolution: BookmarkResolution
         do {
             resolution = try await bookmarkStore.resolve(source.bookmarkData)
@@ -94,9 +105,29 @@ final class RepositorySourceResolver {
         }
 
         let gitDirectoryInfo = await inspectGitDirectory(at: repositoryRoot)
+        guard maximumRepositoryCandidates != 0 else {
+            await bookmarkStore.stopAccessing(resolution)
+            throw RepositoryCatalogScanError.candidateBudgetExceeded(limit: 0)
+        }
+        let submodules: ScannedSubmodules
+        do {
+            let maximumSubmoduleRepositories = maximumRepositoryCandidates.map { max(0, $0 - 1) }
+            submodules = try await scanner.scanInitializedSubmodules(
+                of: repositoryRoot,
+                maximumRepositories: maximumSubmoduleRepositories
+            )
+        } catch {
+            await bookmarkStore.stopAccessing(resolution)
+            throw error
+        }
         await bookmarkStore.stopAccessing(resolution)
         try Task.checkCancellation()
-        return .resolved(source: updated, root: repositoryRoot, gitDirectoryInfo: gitDirectoryInfo)
+        return .resolved(
+            source: updated,
+            root: repositoryRoot,
+            gitDirectoryInfo: gitDirectoryInfo,
+            submodules: submodules
+        )
 
     }
     func inspectGitDirectory(at workingDirectoryURL: URL) async -> GitDirectoryInfo? {

@@ -16,6 +16,9 @@
 @build-release: generate-project
     if command -v distill >/dev/null 2>&1; then distill xcode build -- -project Intreccio.xcodeproj -scheme Intreccio -configuration Release -derivedDataPath .build/derived-data ARCHS=arm64 CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO SDKROOT=auto; else xcodebuild -project Intreccio.xcodeproj -scheme Intreccio -configuration Release -derivedDataPath .build/derived-data ARCHS=arm64 CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO SDKROOT=auto build; fi
 
+@build-release-omv: generate-project
+    if command -v distill >/dev/null 2>&1; then distill xcode build --omv -- -project Intreccio.xcodeproj -scheme Intreccio -configuration Release -derivedDataPath .build/derived-data ARCHS=arm64 CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO SDKROOT=auto; else xcodebuild -project Intreccio.xcodeproj -scheme Intreccio -configuration Release -derivedDataPath .build/derived-data ARCHS=arm64 CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO SDKROOT=auto build; fi
+
 @test: generate-project
     #!/usr/bin/env bash
     set -euo pipefail

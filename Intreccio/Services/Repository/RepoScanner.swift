@@ -21,20 +21,70 @@ nonisolated struct ScannedRepository: Sendable, Equatable {
     let relativePath: String
     let resourceID: String?
     let gitDirectoryInfo: GitDirectoryInfo?
+    let submoduleParentCanonicalURL: URL?
+    let submodulePath: String?
+    let hasSubmodules: Bool
 
     init(
         url: URL,
         canonicalURL: URL,
         relativePath: String,
         resourceID: String?,
-        gitDirectoryInfo: GitDirectoryInfo? = nil
+        gitDirectoryInfo: GitDirectoryInfo? = nil,
+        submoduleParentCanonicalURL: URL? = nil,
+        submodulePath: String? = nil,
+        hasSubmodules: Bool = false
     ) {
         self.url = url
         self.canonicalURL = canonicalURL
         self.relativePath = relativePath
         self.resourceID = resourceID
         self.gitDirectoryInfo = gitDirectoryInfo
+        self.submoduleParentCanonicalURL = submoduleParentCanonicalURL
+        self.submodulePath = submodulePath
+        self.hasSubmodules = hasSubmodules
     }
+}
+
+nonisolated struct ScannedSubmodules: Sendable {
+    let repositories: [ScannedRepository]
+    let hasConfiguredSubmodules: Bool
+    let warnings: [String]
+    let reachedRepositoryLimit: Bool
+    let reachedTimeLimit: Bool
+    var isIncomplete: Bool {
+        !warnings.isEmpty || reachedRepositoryLimit || reachedTimeLimit
+    }
+}
+
+private nonisolated struct RepositoryDirectoryScan: Sendable {
+    let repository: ScannedRepository
+    let submodules: ScannedSubmodules
+}
+
+private nonisolated struct RepositoryScanWalkState: Sendable {
+    var repositories: [ScannedRepository] = []
+    var incompleteReason: String?
+    var visitedDirectoryCount = 0
+}
+
+private nonisolated enum RepositoryScanDirective: Sendable {
+    case next
+    case skipDescendants
+    case stop
+}
+
+private nonisolated struct RepositoryScanStepResult: Sendable {
+    let state: RepositoryScanWalkState
+    let directive: RepositoryScanDirective
+}
+
+private nonisolated struct RepositoryScanContext: Sendable {
+    let root: URL
+    let normalizedExclusions: Set<String>
+    let caseSensitive: Bool
+    let deadline: Date
+    let warningCollector: RepoScanWarningCollector
 }
 
 nonisolated struct RepoScanResult: Sendable, Equatable {
@@ -43,6 +93,7 @@ nonisolated struct RepoScanResult: Sendable, Equatable {
     var incompleteReason: String?
     var visitedDirectoryCount: Int
     var duration: Duration
+    var isIncomplete: Bool { incompleteReason != nil || !warnings.isEmpty }
 }
 
 nonisolated enum RepoScannerError: Error, Sendable {
@@ -84,30 +135,44 @@ actor RepoScanner {
         try await acquireScanSlot()
         defer { releaseScanSlot() }
         try Task.checkCancellation()
+        return try await scanRepositoryTree(root: root, exclusions: exclusions)
+    }
+
+    private func scanRepositoryTree(root: URL, exclusions: [String]) async throws -> RepoScanResult {
         let clock = ContinuousClock()
         let startedAt = clock.now
         let canonicalRoot = RepositoryPathPolicy.canonicalURL(root)
         let caseSensitive = RepositoryPathPolicy.isCaseSensitiveVolume(at: canonicalRoot)
-        let excluded = Set(exclusions.map {
-            RepositoryPathPolicy.normalizedRelativePath($0, caseSensitive: caseSensitive)
-        })
-        let deadline = Date().addingTimeInterval(configuration.timeLimit)
-        var visited = 0
-        var repositories: [ScannedRepository] = []
-        let warningCollector = RepoScanWarningCollector()
-        var incompleteReason: String?
-        func recordWarning(_ message: String) {
-            warningCollector.append(message)
-        }
+        let context = RepositoryScanContext(
+            root: canonicalRoot,
+            normalizedExclusions: Set(exclusions.map {
+                RepositoryPathPolicy.normalizedRelativePath($0, caseSensitive: caseSensitive)
+            }),
+            caseSensitive: caseSensitive,
+            deadline: Date().addingTimeInterval(configuration.timeLimit),
+            warningCollector: RepoScanWarningCollector()
+        )
+        let state = try await walkDirectories(context: context)
+        return RepoScanResult(
+            repositories: state.repositories,
+            warnings: context.warningCollector.warnings,
+            incompleteReason: state.incompleteReason,
+            visitedDirectoryCount: state.visitedDirectoryCount,
+            duration: startedAt.duration(to: clock.now)
+        )
+    }
+
+    private func walkDirectories(context: RepositoryScanContext) async throws -> RepositoryScanWalkState {
         let enumerator = fileManager.enumerator(
-            at: canonicalRoot,
+            at: context.root,
             includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isHiddenKey],
             options: [.skipsHiddenFiles]
         ) { url, error in
-            recordWarning("Could not scan \(url.path): \(error.localizedDescription)")
+            context.warningCollector.append("Could not scan \(url.path): \(error.localizedDescription)")
             return true
         }
-        var pendingRoot: URL? = canonicalRoot
+        var state = RepositoryScanWalkState()
+        var pendingRoot: URL? = context.root
 
         while true {
             try Task.checkCancellation()
@@ -121,7 +186,7 @@ actor RepoScanner {
                 do {
                     values = try child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isHiddenKey])
                 } catch {
-                    recordWarning("Could not inspect \(child.path): \(error.localizedDescription)")
+                    context.warningCollector.append("Could not inspect \(child.path): \(error.localizedDescription)")
                     continue
                 }
                 guard values.isDirectory == true else { continue }
@@ -133,59 +198,132 @@ actor RepoScanner {
                 }
                 directory = RepositoryPathPolicy.standardizedURL(child)
             }
-            if Date() >= deadline {
-                incompleteReason = "Scan stopped after \(Int(configuration.timeLimit)) seconds."
-                break
-            }
-            guard visited < configuration.directoryLimit else {
-                incompleteReason = "Scan stopped after visiting \(configuration.directoryLimit) directories."
-                break
-            }
-            visited += 1
-
-            let relativePath = RepositoryPathPolicy.relativePath(from: canonicalRoot, to: directory) ?? directory.path
-            if RepositoryPathPolicy.isExactlyExcluded(
-                relativePath,
-                normalizedExclusions: excluded,
-                caseSensitive: caseSensitive
-            ) {
-                if directory == canonicalRoot { break }
-                enumerator?.skipDescendants()
+            let result = try await scanDirectory(directory, state: state, context: context)
+            state = result.state
+            switch result.directive {
+            case .next:
                 continue
-            }
-
-            let marker = directory.appendingPathComponent(".git", isDirectory: true)
-            if isNormalGitDirectory(marker) {
-                do {
-                    let gitRoot = try await gitService.repositoryRoot(at: directory)
-                    if gitRoot == RepositoryPathPolicy.canonicalURL(directory) {
-                        repositories.append(ScannedRepository(
-                            url: directory,
-                            canonicalURL: gitRoot,
-                            relativePath: relativePath,
-                            resourceID: ResourceIdentity.read(from: gitRoot),
-                            gitDirectoryInfo: GitDirectoryInfo.read(at: gitRoot)
-                        ))
-                        if repositories.count >= configuration.repositoryLimit {
-                            incompleteReason = "Scan stopped after finding \(configuration.repositoryLimit) repositories."
-                            break
-                        }
-                        if directory == canonicalRoot { break }
-                        enumerator?.skipDescendants()
-                        continue
-                    }
-                } catch {
-                    recordWarning("Ignored invalid repository marker at \(directory.path): \(error)")
-                }
+            case .skipDescendants:
+                enumerator?.skipDescendants()
+            case .stop:
+                return state
             }
         }
+        return state
+    }
 
-        return RepoScanResult(
-            repositories: repositories,
-            warnings: warningCollector.warnings,
-            incompleteReason: incompleteReason,
-            visitedDirectoryCount: visited,
-            duration: startedAt.duration(to: clock.now)
+    private func scanDirectory(
+        _ directory: URL,
+        state currentState: RepositoryScanWalkState,
+        context: RepositoryScanContext
+    ) async throws -> RepositoryScanStepResult {
+        var state = currentState
+        if Date() >= context.deadline {
+            state.incompleteReason = "Scan stopped after \(Int(configuration.timeLimit)) seconds."
+            return RepositoryScanStepResult(state: state, directive: .stop)
+        }
+        guard state.visitedDirectoryCount < configuration.directoryLimit else {
+            state.incompleteReason = "Scan stopped after visiting \(configuration.directoryLimit) directories."
+            return RepositoryScanStepResult(state: state, directive: .stop)
+        }
+        state.visitedDirectoryCount += 1
+
+        let relativePath = RepositoryPathPolicy.relativePath(from: context.root, to: directory) ?? directory.path
+        if RepositoryPathPolicy.isExactlyExcluded(
+            relativePath,
+            normalizedExclusions: context.normalizedExclusions,
+            caseSensitive: context.caseSensitive
+        ) {
+            return RepositoryScanStepResult(
+                state: state,
+                directive: directory == context.root ? .stop : .skipDescendants
+            )
+        }
+        let marker = directory.appendingPathComponent(".git", isDirectory: true)
+        guard isNormalGitDirectory(marker) else {
+            return RepositoryScanStepResult(state: state, directive: .next)
+        }
+        do {
+            guard let scanned = try await scanRepositoryDirectory(
+                at: directory,
+                relativePath: relativePath,
+                currentRepositoryCount: state.repositories.count,
+                context: context
+            ) else {
+                return RepositoryScanStepResult(state: state, directive: .next)
+            }
+            state.repositories.append(scanned.repository)
+            state.repositories.append(contentsOf: scanned.submodules.repositories)
+            scanned.submodules.warnings.forEach(context.warningCollector.append)
+            if scanned.submodules.reachedRepositoryLimit
+                || scanned.submodules.reachedTimeLimit
+                || state.repositories.count >= configuration.repositoryLimit {
+                state.incompleteReason = scanned.submodules.reachedTimeLimit
+                    ? "Scan stopped after \(Int(configuration.timeLimit)) seconds."
+                    : "Scan stopped after finding \(configuration.repositoryLimit) repositories."
+                return RepositoryScanStepResult(state: state, directive: .stop)
+            }
+            return RepositoryScanStepResult(
+                state: state,
+                directive: directory == context.root ? .stop : .skipDescendants
+            )
+        } catch {
+            if error is CancellationError || Task.isCancelled { throw CancellationError() }
+            context.warningCollector.append("Ignored invalid repository marker at \(directory.path): \(error)")
+            return RepositoryScanStepResult(state: state, directive: .next)
+        }
+    }
+
+    private func scanRepositoryDirectory(
+        at directory: URL,
+        relativePath: String,
+        currentRepositoryCount: Int,
+        context: RepositoryScanContext
+    ) async throws -> RepositoryDirectoryScan? {
+        let gitRoot = try await gitService.repositoryRoot(at: directory)
+        guard gitRoot == RepositoryPathPolicy.canonicalURL(directory) else { return nil }
+        let submodules = try await scanInitializedSubmodules(
+            of: gitRoot,
+            relativePathPrefix: relativePath,
+            maximumRepositories: max(
+                0,
+                configuration.repositoryLimit - currentRepositoryCount - 1
+            ),
+            normalizedExclusions: context.normalizedExclusions,
+            caseSensitive: context.caseSensitive,
+            deadline: context.deadline
+        )
+        return RepositoryDirectoryScan(
+            repository: ScannedRepository(
+                url: directory,
+                canonicalURL: gitRoot,
+                relativePath: relativePath,
+                resourceID: ResourceIdentity.read(from: gitRoot),
+                gitDirectoryInfo: GitDirectoryInfo.read(at: gitRoot),
+                hasSubmodules: submodules.hasConfiguredSubmodules
+            ),
+            submodules: submodules
+        )
+    }
+    func scanInitializedSubmodules(
+        of parentURL: URL,
+        relativePathPrefix: String? = nil,
+        maximumRepositories: Int? = nil,
+        normalizedExclusions: Set<String> = [],
+        caseSensitive: Bool = true,
+        deadline: Date? = nil
+    ) async throws -> ScannedSubmodules {
+        try await RepositorySubmoduleScanner(
+            gitService: gitService,
+            repositoryLimit: configuration.repositoryLimit,
+            timeLimit: configuration.timeLimit
+        ).scan(
+            of: parentURL,
+            relativePathPrefix: relativePathPrefix,
+            maximumRepositories: maximumRepositories,
+            normalizedExclusions: normalizedExclusions,
+            caseSensitive: caseSensitive,
+            deadline: deadline
         )
     }
 

@@ -131,8 +131,9 @@ nonisolated struct RepositoryFileEventPathClassifier: Sendable {
             caseSensitive: caseSensitive
         )
         return normalizedEventPath == normalizedRepositoryPath
-            || (normalizedEventPath.last == ".git"
-                && normalizedEventPath.dropLast().elementsEqual(normalizedRepositoryPath))
+            || (normalizedEventPath.count > normalizedRepositoryPath.count
+                && normalizedEventPath.starts(with: normalizedRepositoryPath)
+                && normalizedEventPath.last == ".git")
     }
 
     static func isGitHubConfigurationPath(

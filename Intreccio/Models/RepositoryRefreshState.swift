@@ -30,6 +30,47 @@ nonisolated struct RepositoryStatusContent: Sendable, Equatable {
     }
 }
 
+nonisolated struct RepositorySubmoduleActivity: Sendable, Equatable {
+    let workingTreeChangeCount: Int
+    let aheadCommitCount: Int
+    let behindCommitCount: Int
+    let parentCommitDiffers: Bool
+
+    init(
+        childState: RepositoryRefreshState?,
+        parentState: RepositoryRefreshState?,
+        submodulePath: String?
+    ) {
+        let childStatus = childState?.status
+        workingTreeChangeCount = childState?.changeCount ?? 0
+        let hasUpstream = childStatus?.branch.upstream != nil
+        aheadCommitCount = hasUpstream ? childStatus?.branch.ahead ?? 0 : 0
+        behindCommitCount = hasUpstream ? childStatus?.branch.behind ?? 0 : 0
+        if let parentStatus = parentState?.status, let submodulePath {
+            parentCommitDiffers = parentStatus.changes.contains { change in
+                guard change.path == submodulePath else { return false }
+                return change.indexState != .unmodified
+                    || change.submoduleState?.dropFirst().first == "C"
+            }
+        } else {
+            parentCommitDiffers = false
+        }
+    }
+
+    var hasActivity: Bool {
+        workingTreeChangeCount > 0 || aheadCommitCount > 0 || parentCommitDiffers
+    }
+
+    var sidebarBadge: String? {
+        var indicators = [String]()
+        if workingTreeChangeCount > 0 { indicators.append("Changes \(workingTreeChangeCount)") }
+        if aheadCommitCount > 0 { indicators.append("Ahead \(aheadCommitCount)") }
+        if behindCommitCount > 0 { indicators.append("Behind \(behindCommitCount)") }
+        if parentCommitDiffers { indicators.append("Parent commit differs") }
+        return indicators.isEmpty ? nil : indicators.joined(separator: " · ")
+    }
+}
+
 nonisolated enum RepositoryRefreshPhase: Sendable, Equatable {
     case idle
     case queued

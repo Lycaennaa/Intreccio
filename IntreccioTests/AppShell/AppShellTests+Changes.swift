@@ -50,6 +50,7 @@ extension AppShellTests {
         }
 
         var status = RepoStatus()
+        status.branch.upstream = "origin/main"
         status.branch.behind = 2
         status.changes = [
             change("same.txt", indexState: .added, worktreeState: .unmodified, kind: .ordinary),

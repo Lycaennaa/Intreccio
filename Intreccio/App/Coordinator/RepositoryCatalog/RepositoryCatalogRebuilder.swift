@@ -14,12 +14,24 @@ nonisolated enum RepositoryCatalogRebuilder {
         let gitDirectoryInfo: GitDirectoryInfo?
         let relativePath: String?
         let specificity: Int
+        let submoduleParentCanonicalPath: String?
+        let submodulePath: String?
+        let hasSubmodules: Bool
+        let scanIsIncomplete: Bool
     }
+
+    private struct SubmoduleRelationship {
+        let parentCanonicalPath: String
+        let path: String
+    }
+
     private struct CatalogBuild {
         var repositories: [RepoDescriptor] = []
         var snapshots: [RepositorySnapshot] = []
         var unmatchedSnapshotIDs: Set<UUID> = []
         var candidateCanonicalPaths = Set<String>()
+        var repositoryIDsByCanonicalPath: [String: UUID] = [:]
+        var submoduleRelationshipsByRepositoryID: [UUID: SubmoduleRelationship] = [:]
     }
 
     private struct SnapshotMatchIndex {
@@ -28,6 +40,7 @@ nonisolated enum RepositoryCatalogRebuilder {
         var unmatchedSnapshotIDs: Set<UUID>
         var resourceIdentities = Set<String>()
         var canonicalPaths = Set<String>()
+        let repositoryIDsWithSubmodules: Set<UUID>
     }
 
     private struct IncompleteFallback {
@@ -61,9 +74,11 @@ nonisolated enum RepositoryCatalogRebuilder {
             to: &build,
             state: state,
             sourceScans: sourceScans,
+            standaloneRepositories: standaloneRepositories,
             previousRepositoriesByID: previousRepositoriesByID,
             snapshotGitDirectoryInfos: snapshotGitDirectoryInfos
         )
+        attachSubmoduleRelationships(to: &build)
         let repositories = attachMainWorktreeURLs(to: build.repositories)
         return RepositoryCatalogRebuildResult(repositories: repositories, snapshots: build.snapshots)
     }
@@ -122,21 +137,45 @@ nonisolated enum RepositoryCatalogRebuilder {
                     resourceID: repository.resourceID,
                     gitDirectoryInfo: repository.gitDirectoryInfo,
                     relativePath: repository.relativePath,
-                    specificity: URL(fileURLWithPath: source.lastResolvedPath).pathComponents.count
+                    specificity: URL(fileURLWithPath: source.lastResolvedPath).pathComponents.count,
+                    submoduleParentCanonicalPath: repository.submoduleParentCanonicalURL?.path,
+                    submodulePath: repository.submodulePath,
+                    hasSubmodules: repository.hasSubmodules,
+                    scanIsIncomplete: sourceScans[source.id]?.isIncomplete == true
                 ))
             }
         }
         for source in state.standaloneRepos {
             guard let repository = standaloneRepositories[source.id] else { continue }
+            let sourceKind = RepositorySource.standalone(id: source.id)
             candidates.append(Candidate(
-                source: .standalone(id: source.id),
+                source: sourceKind,
                 url: repository.url,
                 canonicalURL: repository.url,
                 resourceID: source.resourceID,
                 gitDirectoryInfo: repository.gitDirectoryInfo,
                 relativePath: nil,
-                specificity: -1
+                specificity: -1,
+                submoduleParentCanonicalPath: nil,
+                submodulePath: nil,
+                hasSubmodules: repository.hasSubmodules,
+                scanIsIncomplete: repository.submoduleScanIncomplete
             ))
+            for submodule in repository.submoduleRepositories {
+                candidates.append(Candidate(
+                    source: sourceKind,
+                    url: submodule.url,
+                    canonicalURL: submodule.canonicalURL,
+                    resourceID: submodule.resourceID,
+                    gitDirectoryInfo: submodule.gitDirectoryInfo,
+                    relativePath: submodule.relativePath,
+                    specificity: -1,
+                    submoduleParentCanonicalPath: submodule.submoduleParentCanonicalURL?.path,
+                    submodulePath: submodule.submodulePath,
+                    hasSubmodules: submodule.hasSubmodules,
+                    scanIsIncomplete: repository.submoduleScanIncomplete
+                ))
+            }
         }
         candidates.sort {
             if $0.specificity != $1.specificity { return $0.specificity > $1.specificity }
@@ -169,18 +208,23 @@ nonisolated enum RepositoryCatalogRebuilder {
         var byResourceID: [String: [RepositorySnapshot]] = [:]
         var byCanonicalPath: [String: [RepositorySnapshot]] = [:]
         var unmatchedSnapshotIDs = Set<UUID>()
+        var repositoryIDsWithSubmodules = Set<UUID>()
         for snapshot in snapshots {
             let pathIdentity = RepositoryPathPolicy.canonicalPath(snapshot.canonicalPath)
             byCanonicalPath[pathIdentity, default: []].append(snapshot)
             if let resourceID = snapshot.resourceID {
                 byResourceID[resourceID, default: []].append(snapshot)
             }
+            if let parentID = snapshot.submoduleParentRepositoryID {
+                repositoryIDsWithSubmodules.insert(parentID)
+            }
             unmatchedSnapshotIDs.insert(snapshot.id)
         }
         return SnapshotMatchIndex(
             byResourceID: byResourceID,
             byCanonicalPath: byCanonicalPath,
-            unmatchedSnapshotIDs: unmatchedSnapshotIDs
+            unmatchedSnapshotIDs: unmatchedSnapshotIDs,
+            repositoryIDsWithSubmodules: repositoryIDsWithSubmodules
         )
     }
 
@@ -191,12 +235,25 @@ nonisolated enum RepositoryCatalogRebuilder {
         previousRepositoriesByID: [UUID: RepoDescriptor]
     ) {
         let pathIdentity = RepositoryPathPolicy.canonicalPath(candidate.canonicalURL.path)
-        guard !index.canonicalPaths.contains(pathIdentity) else { return }
+        if index.canonicalPaths.contains(pathIdentity) {
+            if let repositoryID = build.repositoryIDsByCanonicalPath[pathIdentity] {
+                rememberSubmoduleRelationship(candidate, repositoryID: repositoryID, in: &build)
+            }
+            return
+        }
         if let resourceID = candidate.resourceID, index.resourceIdentities.contains(resourceID) { return }
         index.canonicalPaths.insert(pathIdentity)
         if let resourceID = candidate.resourceID { index.resourceIdentities.insert(resourceID) }
         let previous = matchedSnapshot(for: candidate, pathIdentity: pathIdentity, index: index)
         let id = previous?.id ?? UUID()
+        let hasSubmodules = candidate.hasSubmodules
+            || (
+                candidate.scanIsIncomplete
+                    && (
+                        previousRepositoriesByID[id]?.hasSubmodules == true
+                            || index.repositoryIDsWithSubmodules.contains(id)
+                    )
+            )
         let gitDirectoryInfo = candidate.gitDirectoryInfo ?? previousGitDirectoryInfo(
             id: id,
             canonicalURL: candidate.canonicalURL,
@@ -219,8 +276,24 @@ nonisolated enum RepositoryCatalogRebuilder {
             resourceID: candidate.resourceID,
             relativePath: candidate.relativePath,
             availability: .available,
-            gitDirectoryInfo: gitDirectoryInfo
+            gitDirectoryInfo: gitDirectoryInfo,
+            hasSubmodules: hasSubmodules
         ))
+        build.repositoryIDsByCanonicalPath[pathIdentity] = id
+        rememberSubmoduleRelationship(candidate, repositoryID: id, in: &build)
+    }
+
+    private static func rememberSubmoduleRelationship(
+        _ candidate: Candidate,
+        repositoryID: UUID,
+        in build: inout CatalogBuild
+    ) {
+        guard let parentPath = candidate.submoduleParentCanonicalPath,
+              let submodulePath = candidate.submodulePath else { return }
+        build.submoduleRelationshipsByRepositoryID[repositoryID] = SubmoduleRelationship(
+            parentCanonicalPath: parentPath,
+            path: submodulePath
+        )
     }
 
     private static func matchedSnapshot(
@@ -241,10 +314,12 @@ nonisolated enum RepositoryCatalogRebuilder {
         to build: inout CatalogBuild,
         state: PersistedState,
         sourceScans: [UUID: RepoScanResult],
+        standaloneRepositories: [UUID: StandaloneRepositoryLocation],
         previousRepositoriesByID: [UUID: RepoDescriptor],
         snapshotGitDirectoryInfos: [UUID: GitDirectoryInfo]
     ) {
         let validSourceIDs = Set(state.watchRoots.map(\.id) + state.standaloneRepos.map(\.id))
+        let repositoryIDsWithSubmodules = Set(state.repoSnapshots.compactMap(\.submoduleParentRepositoryID))
         for snapshot in state.repoSnapshots
             where build.unmatchedSnapshotIDs.contains(snapshot.id) && validSourceIDs.contains(snapshot.sourceID) {
             let pathIdentity = RepositoryPathPolicy.canonicalPath(snapshot.canonicalPath)
@@ -262,8 +337,13 @@ nonisolated enum RepositoryCatalogRebuilder {
             }
             guard let source = source(for: snapshot.sourceID, in: state) else { continue }
             var unavailable = snapshot
-            if sourceScans[snapshot.sourceID]?.incompleteReason == nil {
-                unavailable.availability = .unavailable(reason: "Repository is missing or access is unavailable.")
+            let scanIsIncomplete = sourceScans[snapshot.sourceID]?.isIncomplete == true
+                || standaloneRepositories[snapshot.sourceID]?.submoduleScanIncomplete == true
+            if !scanIsIncomplete {
+                let reason = snapshot.submoduleParentRepositoryID == nil
+                    ? "Repository is missing or access is unavailable."
+                    : "Initialized submodule was not found in the current scan."
+                unavailable.availability = .unavailable(reason: reason)
             }
             let url = URL(fileURLWithPath: snapshot.canonicalPath, isDirectory: true)
             build.snapshots.append(unavailable)
@@ -279,7 +359,11 @@ nonisolated enum RepositoryCatalogRebuilder {
                     id: snapshot.id,
                     canonicalURL: url,
                     repositoriesByID: previousRepositoriesByID
-                ) ?? snapshotGitDirectoryInfos[snapshot.id]
+                ) ?? snapshotGitDirectoryInfos[snapshot.id],
+                submoduleParentRepositoryID: snapshot.submoduleParentRepositoryID,
+                submodulePath: snapshot.submodulePath,
+                hasSubmodules: previousRepositoriesByID[snapshot.id]?.hasSubmodules == true
+                    || (scanIsIncomplete && repositoryIDsWithSubmodules.contains(snapshot.id))
             ))
         }
     }
@@ -292,6 +376,9 @@ nonisolated enum RepositoryCatalogRebuilder {
         previousRepositoriesByID: [UUID: RepoDescriptor],
         snapshotGitDirectoryInfos: [UUID: GitDirectoryInfo]
     ) {
+        let availability: RepositoryAvailability = snapshot.submoduleParentRepositoryID == nil
+            ? snapshot.availability
+            : .unavailable(reason: "Submodule checkout was not confirmed in the current source scan.")
         guard let fallback = incompleteFallback(for: snapshot, state: state, sourceScans: sourceScans) else {
             build.snapshots.append(snapshot)
             return
@@ -302,7 +389,9 @@ nonisolated enum RepositoryCatalogRebuilder {
             relativePath: fallback.relativePath,
             canonicalPath: snapshot.canonicalPath,
             resourceID: snapshot.resourceID,
-            availability: snapshot.availability
+            availability: availability,
+            submoduleParentRepositoryID: snapshot.submoduleParentRepositoryID,
+            submodulePath: snapshot.submodulePath
         ))
         let url = URL(fileURLWithPath: snapshot.canonicalPath, isDirectory: true)
         build.repositories.append(RepoDescriptor(
@@ -312,15 +401,46 @@ nonisolated enum RepositoryCatalogRebuilder {
             canonicalURL: url,
             resourceID: snapshot.resourceID,
             relativePath: fallback.relativePath,
-            availability: snapshot.availability,
+            availability: availability,
             gitDirectoryInfo: previousGitDirectoryInfo(
                 id: snapshot.id,
                 canonicalURL: url,
                 repositoriesByID: previousRepositoriesByID
-            ) ?? snapshotGitDirectoryInfos[snapshot.id]
-            ))
+            ) ?? snapshotGitDirectoryInfos[snapshot.id],
+            submoduleParentRepositoryID: snapshot.submoduleParentRepositoryID,
+            submodulePath: snapshot.submodulePath,
+            hasSubmodules: previousRepositoriesByID[snapshot.id]?.hasSubmodules ?? false
+        ))
     }
 
+    private static func attachSubmoduleRelationships(to build: inout CatalogBuild) {
+        let repositoryIDsByCanonicalPath = Dictionary(
+            build.repositories.map {
+                (RepositoryPathPolicy.canonicalPath($0.canonicalURL.path), $0.id)
+            },
+            uniquingKeysWith: { existing, _ in existing }
+        )
+        for index in build.repositories.indices {
+            let repositoryID = build.repositories[index].id
+            guard let relationship = build.submoduleRelationshipsByRepositoryID[repositoryID],
+                  let parentID = repositoryIDsByCanonicalPath[
+                    RepositoryPathPolicy.canonicalPath(relationship.parentCanonicalPath)
+                  ] else { continue }
+            build.repositories[index] = build.repositories[index].withSubmoduleParentRepository(
+                id: parentID,
+                path: relationship.path
+            )
+        }
+        for index in build.snapshots.indices {
+            let repositoryID = build.snapshots[index].id
+            guard let relationship = build.submoduleRelationshipsByRepositoryID[repositoryID],
+                  let parentID = repositoryIDsByCanonicalPath[
+                    RepositoryPathPolicy.canonicalPath(relationship.parentCanonicalPath)
+                  ] else { continue }
+            build.snapshots[index].submoduleParentRepositoryID = parentID
+            build.snapshots[index].submodulePath = relationship.path
+        }
+    }
     private static func attachMainWorktreeURLs(to repositories: [RepoDescriptor]) -> [RepoDescriptor] {
         var mainURLsByGitDirectory: [String: URL] = [:]
         for repository in repositories where !repository.isLinkedWorktree {

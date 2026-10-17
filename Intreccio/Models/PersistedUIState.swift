@@ -14,6 +14,7 @@ nonisolated struct PersistedUIState: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case selectedRepoID
         case mode
+        case showCleanSubmoduleRepositoryIDs
         case pinnedRepositoryIDs
         case searchText
         case sidebarWidth
@@ -166,6 +167,7 @@ nonisolated struct PersistedUIState: Codable, Sendable, Equatable {
     var selectedRepoID: UUID?
     var mode: AppMode = .changes
     var pinnedRepositoryIDs: Set<UUID> = []
+    var showCleanSubmoduleRepositoryIDs: Set<UUID> = []
     var searchText = ""
     var sidebarWidth: Double = 240
     var changesListWidth: Double?
@@ -196,6 +198,7 @@ nonisolated struct PersistedUIState: Codable, Sendable, Equatable {
         selectedRepoID: UUID? = nil,
         mode: AppMode = .changes,
         pinnedRepositoryIDs: Set<UUID> = [],
+        showCleanSubmoduleRepositoryIDs: Set<UUID> = [],
         searchText: String = "",
         sidebarWidth: Double = 240,
         changesListWidth: Double? = nil,
@@ -212,6 +215,7 @@ nonisolated struct PersistedUIState: Codable, Sendable, Equatable {
         self.selectedRepoID = selectedRepoID
         self.mode = mode
         self.pinnedRepositoryIDs = pinnedRepositoryIDs
+        self.showCleanSubmoduleRepositoryIDs = showCleanSubmoduleRepositoryIDs
         self.searchText = searchText
         self.sidebarWidth = sidebarWidth
         self.changesListWidth = changesListWidth
@@ -229,6 +233,10 @@ nonisolated struct PersistedUIState: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         selectedRepoID = try container.decodeIfPresent(UUID.self, forKey: .selectedRepoID)
         mode = try container.decodeIfPresent(AppMode.self, forKey: .mode) ?? .changes
+        showCleanSubmoduleRepositoryIDs = try container.decodeIfPresent(
+            Set<UUID>.self,
+            forKey: .showCleanSubmoduleRepositoryIDs
+        ) ?? []
         pinnedRepositoryIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .pinnedRepositoryIDs) ?? []
         searchText = try container.decodeIfPresent(String.self, forKey: .searchText) ?? ""
         sidebarWidth = try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? 240

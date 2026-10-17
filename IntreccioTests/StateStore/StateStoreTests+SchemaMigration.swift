@@ -56,6 +56,7 @@ extension StateStoreTests {
         XCTAssertEqual(loaded.state.uiState.diffFontSize, 24)
         XCTAssertEqual(loaded.state.uiState.fileWatchDebounceMilliseconds, 50)
         XCTAssertTrue(loaded.state.uiState.showWhitespaceInDiff)
+        XCTAssertTrue(loaded.state.uiState.showCleanSubmoduleRepositoryIDs.isEmpty)
         XCTAssertNil(loaded.state.uiState.defaultOpenApplicationURL)
     }
 

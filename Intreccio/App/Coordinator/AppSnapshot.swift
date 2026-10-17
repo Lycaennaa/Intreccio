@@ -3,6 +3,7 @@ import Foundation
 nonisolated enum SidebarSnapshotUpdate: Sendable, Equatable {
     case structural
     case repositoryBadge(UUID)
+    case submoduleActivity
     case none
 }
 

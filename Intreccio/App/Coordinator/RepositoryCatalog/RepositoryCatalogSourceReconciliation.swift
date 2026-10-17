@@ -1,5 +1,29 @@
 import Foundation
 
+private struct RestoredWatchRootSources {
+    let sources: [WatchRoot]
+    let scans: [UUID: RepoScanResult]
+    let messages: [UUID: String]
+}
+
+private struct RestoredStandaloneSources {
+    let sources: [StandaloneRepository]
+    let locations: [UUID: StandaloneRepositoryLocation]
+    let messages: [UUID: String]
+}
+nonisolated enum RepositoryCatalogSubmoduleDiagnostic {
+    static func message(for submodules: ScannedSubmodules) -> String? {
+        if let warning = submodules.warnings.first {
+            return "Submodule scan warning: \(warning)"
+        }
+        if submodules.reachedTimeLimit { return "Submodule scan stopped at its time limit." }
+        if submodules.reachedRepositoryLimit {
+            return "Submodule scan stopped after finding the repository limit."
+        }
+        return nil
+    }
+}
+
 @MainActor
 final class RepositoryCatalogSourceReconciliation {
     private let catalogState: RepositoryCatalogState
@@ -38,66 +62,33 @@ final class RepositoryCatalogSourceReconciliation {
     ) async throws -> CatalogTransaction {
         guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
         let previousRepositories = Dictionary(uniqueKeysWithValues: repositories.map { ($0.id, $0) })
-        var scans: [UUID: RepoScanResult] = [:]
-        var standaloneRepositories: [UUID: StandaloneRepositoryLocation] = [:]
-        var proposed = state
-        var messages: [UUID: String] = [:]
-
-        let candidateLimit = try PersistedCatalogBudget.remainingCandidateCapacity(for: proposed)
-
-        let watchRootOutcomes = try await sourceScanner.scanWatchRoots(
-            proposed.watchRoots,
+        let candidateLimit = try PersistedCatalogBudget.remainingCandidateCapacity(for: state)
+        let watchRootSources = try await resolveWatchRootSources(
+            state.watchRoots,
             generation: generation,
             candidateLimit: candidateLimit
         )
-
-        guard !Task.isCancelled, !lifecycle.isShuttingDown else { throw CancellationError() }
-        for (index, outcome) in watchRootOutcomes.enumerated() {
-            let source = proposed.watchRoots[index]
-            switch outcome {
-            case .success(let resolvedSource, let result):
-                proposed.watchRoots[index] = resolvedSource
-                scans[source.id] = result
-                messages[source.id] = repositoryCatalogScanMessage(for: result)
-            case .scanFailure(let resolvedSource, let message):
-                proposed.watchRoots[index] = resolvedSource
-                messages[source.id] = "Scan failed: \(message)"
-            case .accessFailure(let resolvedSource, let message):
-                proposed.watchRoots[index] = resolvedSource
-                messages[source.id] = "Access unavailable: \(message)"
-            }
+        let watchRootCandidateCount = watchRootSources.scans.values.reduce(0) {
+            $0 + $1.repositories.count
         }
-
-        let standaloneResolutions = try await standaloneResolver.resolveStandalones(
-            proposed.standaloneRepos,
-            generation: generation
+        let standaloneCandidateLimit = candidateLimit - watchRootCandidateCount
+        let standaloneSources = try await resolveStandaloneSources(
+            state.standaloneRepos,
+            generation: generation,
+            candidateLimit: standaloneCandidateLimit
         )
-        for (index, resolution) in standaloneResolutions.enumerated() {
-            let source = proposed.standaloneRepos[index]
-            switch resolution {
-            case .resolved(let resolvedSource, let root, let gitDirectoryInfo):
-                proposed.standaloneRepos[index] = resolvedSource
-                standaloneRepositories[source.id] = StandaloneRepositoryLocation(
-                    url: root,
-                    gitDirectoryInfo: gitDirectoryInfo
-                )
-            case .repositoryUnavailable(let resolvedSource, let message):
-                proposed.standaloneRepos[index] = resolvedSource
-                messages[source.id] = "Repository unavailable: \(message)"
-            case .accessUnavailable(let resolvedSource, let message):
-                proposed.standaloneRepos[index] = resolvedSource
-                messages[source.id] = "Access unavailable: \(message)"
-            }
-        }
-
+        var proposed = state
+        proposed.watchRoots = watchRootSources.sources
+        proposed.standaloneRepos = standaloneSources.sources
+        var messages = watchRootSources.messages
+        messages.merge(standaloneSources.messages) { _, standaloneMessage in standaloneMessage }
         let snapshotGitDirectoryInfos = try await resolveSnapshotGitDirectoryInfos(
             state: proposed,
-            sourceScans: scans,
-            standaloneRepositories: standaloneRepositories,
+            sourceScans: watchRootSources.scans,
+            standaloneRepositories: standaloneSources.locations,
             previousRepositories: Array(previousRepositories.values),
             generation: generation
         )
-
         guard !Task.isCancelled,
               !lifecycle.isShuttingDown,
               generation == nil || generation.map(self.generation.isCurrentFullRescan) == true else {
@@ -105,8 +96,8 @@ final class RepositoryCatalogSourceReconciliation {
         }
         let provisional = catalogState.makeChange(
             state: proposed,
-            sourceScans: scans,
-            standaloneRepositories: standaloneRepositories,
+            sourceScans: watchRootSources.scans,
+            standaloneRepositories: standaloneSources.locations,
             scanMessages: messages,
             snapshotGitDirectoryInfos: snapshotGitDirectoryInfos,
             effect: .restored(
@@ -122,21 +113,35 @@ final class RepositoryCatalogSourceReconciliation {
                 || previous.canonicalURL != repository.canonicalURL
                 || previous.resourceID != repository.resourceID
         }.map(\.id)
-        let effect = initialStartup
-            ? CatalogEffectPlan.startupRestored(
-                changedRepositoryIDs: changedRepositoryIDs,
-                refreshUpstream: refreshUpstream,
-                clearsStatusMessage: generation != nil
-            )
-            : CatalogEffectPlan.restored(
-                changedRepositoryIDs: changedRepositoryIDs,
-                refreshUpstream: refreshUpstream,
-                clearsStatusMessage: generation != nil
-            )
-        let change = provisional.replacing(effect: effect)
+        let effect = restoredEffect(
+            changedRepositoryIDs: changedRepositoryIDs,
+            refreshUpstream: refreshUpstream,
+            clearsStatusMessage: generation != nil,
+            initialStartup: initialStartup
+        )
         return CatalogTransaction(
-            change: change,
+            change: provisional.replacing(effect: effect),
             persistenceOrder: .afterAcceptance(clearPersistenceErrorOnSuccess: true)
+        )
+    }
+
+    private func restoredEffect(
+        changedRepositoryIDs: [UUID],
+        refreshUpstream: Bool,
+        clearsStatusMessage: Bool,
+        initialStartup: Bool
+    ) -> CatalogEffectPlan {
+        if initialStartup {
+            return .startupRestored(
+                changedRepositoryIDs: changedRepositoryIDs,
+                refreshUpstream: refreshUpstream,
+                clearsStatusMessage: clearsStatusMessage
+            )
+        }
+        return .restored(
+            changedRepositoryIDs: changedRepositoryIDs,
+            refreshUpstream: refreshUpstream,
+            clearsStatusMessage: clearsStatusMessage
         )
     }
 
@@ -192,17 +197,12 @@ final class RepositoryCatalogSourceReconciliation {
             resolutionSource = source
             result = scanned
         case .scanFailure(_, let message), .accessFailure(_, let message):
-            guard self.generation.isCurrentSourceRescan(sourceID: sourceID, generation: generation) else {
-                throw CancellationError()
-            }
-            var messages = scanMessages
-            messages[sourceID] = "Scan failed: \(message)"
-            let change = catalogState.makeChange(
+            return try failedSourceRescan(
+                sourceID,
+                generation: generation,
                 state: state,
-                scanMessages: messages,
-                effect: .scanFailed
+                message: message
             )
-            return CatalogTransaction(change: change, persistenceOrder: .acceptanceOnly)
         }
 
         guard self.generation.isCurrentSourceRescan(sourceID: sourceID, generation: generation),
@@ -247,11 +247,23 @@ final class RepositoryCatalogSourceReconciliation {
         var proposed = state
         var locations = standaloneRepositories
         var message: String?
+        let candidateLimit = try PersistedCatalogBudget.remainingCandidateCapacity(for: state)
         let resolution = try await standaloneResolver.resolveStandalone(proposed.standaloneRepos[index])
         switch resolution {
-        case .resolved(let source, let root, let gitDirectoryInfo):
+        case .resolved(let source, let root, let gitDirectoryInfo, let submodules):
+            try RepositoryCatalogScanError.validateCandidateCount(
+                1 + submodules.repositories.count,
+                limit: candidateLimit
+            )
             proposed.standaloneRepos[index] = source
-            locations[sourceID] = StandaloneRepositoryLocation(url: root, gitDirectoryInfo: gitDirectoryInfo)
+            locations[sourceID] = StandaloneRepositoryLocation(
+                url: root,
+                gitDirectoryInfo: gitDirectoryInfo,
+                submoduleRepositories: submodules.repositories,
+                hasSubmodules: submodules.hasConfiguredSubmodules,
+                submoduleScanIncomplete: submodules.isIncomplete
+            )
+            message = RepositoryCatalogSubmoduleDiagnostic.message(for: submodules)
         case .repositoryUnavailable(let source, let diagnostic):
             proposed.standaloneRepos[index] = source
             locations[sourceID] = nil
@@ -283,6 +295,96 @@ final class RepositoryCatalogSourceReconciliation {
             change: change,
             persistenceOrder: .afterAcceptance(clearPersistenceErrorOnSuccess: true)
         )
+    }
+
+    private func resolveWatchRootSources(
+        _ sources: [WatchRoot],
+        generation: UInt64?,
+        candidateLimit: Int
+    ) async throws -> RestoredWatchRootSources {
+        let outcomes = try await sourceScanner.scanWatchRoots(
+            sources,
+            generation: generation,
+            candidateLimit: candidateLimit
+        )
+        var resolvedSources = sources
+        var scans: [UUID: RepoScanResult] = [:]
+        var messages: [UUID: String] = [:]
+        for (index, outcome) in outcomes.enumerated() {
+            let source = sources[index]
+            switch outcome {
+            case .success(let resolvedSource, let result):
+                resolvedSources[index] = resolvedSource
+                scans[source.id] = result
+                messages[source.id] = repositoryCatalogScanMessage(for: result)
+            case .scanFailure(let resolvedSource, let message):
+                resolvedSources[index] = resolvedSource
+                messages[source.id] = "Scan failed: \(message)"
+            case .accessFailure(let resolvedSource, let message):
+                resolvedSources[index] = resolvedSource
+                messages[source.id] = "Access unavailable: \(message)"
+            }
+        }
+        return RestoredWatchRootSources(sources: resolvedSources, scans: scans, messages: messages)
+    }
+
+    private func resolveStandaloneSources(
+        _ sources: [StandaloneRepository],
+        generation: UInt64?,
+        candidateLimit: Int
+    ) async throws -> RestoredStandaloneSources {
+        let resolutions = try await standaloneResolver.resolveStandalones(
+            sources,
+            generation: generation,
+            candidateLimit: candidateLimit
+        )
+        var resolvedSources = sources
+        var locations: [UUID: StandaloneRepositoryLocation] = [:]
+        var messages: [UUID: String] = [:]
+        for (index, resolution) in resolutions.enumerated() {
+            let source = sources[index]
+            switch resolution {
+            case .resolved(let resolvedSource, let root, let gitDirectoryInfo, let submodules):
+                resolvedSources[index] = resolvedSource
+                locations[source.id] = StandaloneRepositoryLocation(
+                    url: root,
+                    gitDirectoryInfo: gitDirectoryInfo,
+                    submoduleRepositories: submodules.repositories,
+                    hasSubmodules: submodules.hasConfiguredSubmodules,
+                    submoduleScanIncomplete: submodules.isIncomplete
+                )
+                if let message = RepositoryCatalogSubmoduleDiagnostic.message(for: submodules) {
+                    messages[source.id] = message
+                }
+            case .repositoryUnavailable(let resolvedSource, let message):
+                resolvedSources[index] = resolvedSource
+                messages[source.id] = "Repository unavailable: \(message)"
+            case .accessUnavailable(let resolvedSource, let message):
+                resolvedSources[index] = resolvedSource
+                messages[source.id] = "Access unavailable: \(message)"
+            }
+        }
+        return RestoredStandaloneSources(
+            sources: resolvedSources,
+            locations: locations,
+            messages: messages
+        )
+    }
+
+
+    private func failedSourceRescan(
+        _ sourceID: UUID,
+        generation: UInt64,
+        state: PersistedState,
+        message: String
+    ) throws -> CatalogTransaction {
+        guard self.generation.isCurrentSourceRescan(sourceID: sourceID, generation: generation) else {
+            throw CancellationError()
+        }
+        var messages = scanMessages
+        messages[sourceID] = "Scan failed: \(message)"
+        let change = catalogState.makeChange(state: state, scanMessages: messages, effect: .scanFailed)
+        return CatalogTransaction(change: change, persistenceOrder: .acceptanceOnly)
     }
 
     private func isCurrentFullRescan(_ generation: UInt64?) -> Bool {

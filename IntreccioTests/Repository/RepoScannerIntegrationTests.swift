@@ -18,6 +18,55 @@ final class RepoScannerIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(result.duration, .zero)
     }
 
+    func testScanFindsInitializedSubmodulesRecursivelyAndSkipsUninitializedOnes() async throws {
+        let workspace = try makeTestDirectory()
+        let parent = workspace.appendingPathComponent("parent", isDirectory: true)
+        let childSource = workspace.appendingPathComponent("child-source", isDirectory: true)
+        let nestedSource = workspace.appendingPathComponent("nested-source", isDirectory: true)
+        try initializeCommittedRepository(at: childSource, fileName: "child.txt")
+        try initializeCommittedRepository(at: nestedSource, fileName: "nested.txt")
+        try runGit(at: childSource, arguments: [
+            "-c", "protocol.file.allow=always", "submodule", "add", "--",
+            nestedSource.path, "nested/lib"
+        ])
+        try runGit(at: childSource, arguments: ["commit", "-m", "Add nested submodule"])
+
+        try initializeRepository(at: parent)
+        try runGit(at: parent, arguments: ["config", "user.name", "Fixture User"])
+        try runGit(at: parent, arguments: ["config", "user.email", "fixture@example.com"])
+        try runGit(at: parent, arguments: [
+            "-c", "protocol.file.allow=always", "submodule", "add", "--",
+            childSource.path, "vendor/child"
+        ])
+        try runGit(at: parent, arguments: [
+            "-c", "protocol.file.allow=always", "submodule", "add", "--",
+            childSource.path, "inactive"
+        ])
+        try runGit(at: parent, arguments: ["commit", "-m", "Add submodules"])
+        try runGit(at: parent.appendingPathComponent("vendor/child", isDirectory: true), arguments: [
+            "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive"
+        ])
+        try runGit(at: parent, arguments: ["submodule", "deinit", "--force", "--", "inactive"])
+        try initializeRepository(at: parent.appendingPathComponent("unrelated", isDirectory: true))
+
+        let result = try await RepoScanner().scan(root: parent, exclusions: [])
+
+        XCTAssertEqual(result.repositories.map(\.relativePath), [".", "vendor/child", "vendor/child/nested/lib"])
+        XCTAssertTrue(result.warnings.isEmpty)
+        XCTAssertNil(result.incompleteReason)
+        XCTAssertTrue(result.repositories[0].hasSubmodules)
+        XCTAssertTrue(result.repositories[1].hasSubmodules)
+        XCTAssertEqual(
+            result.repositories[1].submoduleParentCanonicalURL,
+            parent.resolvingSymlinksInPath().standardizedFileURL
+        )
+        XCTAssertEqual(result.repositories[1].submodulePath, "vendor/child")
+        XCTAssertEqual(result.repositories[2].submoduleParentCanonicalURL, result.repositories[1].canonicalURL)
+        XCTAssertEqual(result.repositories[2].submodulePath, "nested/lib")
+        let excludedResult = try await RepoScanner().scan(root: parent, exclusions: ["vendor"])
+        XCTAssertEqual(excludedResult.repositories.map(\.relativePath), ["."])
+    }
+
     func testGitDirectoryInfoRejectsOversizedMarkerFiles() throws {
         let root = try makeTestDirectory()
         let markerRoot = root.appendingPathComponent("oversized-marker", isDirectory: true)
@@ -163,6 +212,15 @@ final class RepoScannerIntegrationTests: XCTestCase {
     private func initializeRepository(at url: URL) throws {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try runGit(at: url, arguments: ["init", "-b", "main"])
+    }
+
+    private func initializeCommittedRepository(at url: URL, fileName: String) throws {
+        try initializeRepository(at: url)
+        try runGit(at: url, arguments: ["config", "user.name", "Fixture User"])
+        try runGit(at: url, arguments: ["config", "user.email", "fixture@example.com"])
+        try Data("initial".utf8).write(to: url.appendingPathComponent(fileName))
+        try runGit(at: url, arguments: ["add", fileName])
+        try runGit(at: url, arguments: ["commit", "-m", "Initial commit"])
     }
 }
 

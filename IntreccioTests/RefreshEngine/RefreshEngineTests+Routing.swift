@@ -77,6 +77,31 @@ extension RefreshEngineTests {
     }
 
     @MainActor
+    func testNestedSubmoduleGitMarkerIsStructuralToParentRepository() {
+        let repository = URL(fileURLWithPath: "/work/main", isDirectory: true)
+        let submoduleMarker = repository
+            .appendingPathComponent("vendor/child", isDirectory: true)
+            .appendingPathComponent(".git")
+        let submoduleGitConfig = submoduleMarker.appendingPathComponent("config")
+
+        XCTAssertTrue(RepositoryFileEventPathClassifier.isRepositoryStructuralPath(
+            submoduleMarker.pathComponents,
+            repositoryPathComponents: repository.pathComponents,
+            caseSensitive: true
+        ))
+        XCTAssertTrue(RepositoryFileEventPathClassifier.isRepositoryStructuralPath(
+            repository.appendingPathComponent(".git").pathComponents,
+            repositoryPathComponents: repository.pathComponents,
+            caseSensitive: true
+        ))
+        XCTAssertFalse(RepositoryFileEventPathClassifier.isRepositoryStructuralPath(
+            submoduleGitConfig.pathComponents,
+            repositoryPathComponents: repository.pathComponents,
+            caseSensitive: true
+        ))
+    }
+
+    @MainActor
     func testSourceEventGroupRouterMatchesIndependentPartitionsAndRepositoryRouting() {
         let outerRoot = URL(fileURLWithPath: "/work/Source", isDirectory: true)
         let nestedRoot = outerRoot.appendingPathComponent("Nested", isDirectory: true)

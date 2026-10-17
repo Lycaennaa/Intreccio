@@ -31,6 +31,7 @@ extension StateStoreTests {
             )],
             uiState: PersistedUIState(
                 selectedRepoID: repositoryID,
+                showCleanSubmoduleRepositoryIDs: [repositoryID],
                 searchText: "repo",
                 changesListWidth: 512,
                  savedOpenApplicationURLs: [applicationURL],

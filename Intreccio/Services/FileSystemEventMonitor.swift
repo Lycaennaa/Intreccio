@@ -248,7 +248,8 @@ nonisolated final class FileSystemEventMonitor: @unchecked Sendable {
                     path: RepositoryPathPolicy.standardizedURL(URL(fileURLWithPath: String(cString: pointer))).path,
                     requiresFullRescan: requiresFullRescan || count > limit,
                     requiresSourceRescan: flag & (
-                        FSEventStreamEventFlags(kFSEventStreamEventFlagItemRemoved)
+                        FSEventStreamEventFlags(kFSEventStreamEventFlagItemCreated)
+                        | FSEventStreamEventFlags(kFSEventStreamEventFlagItemRemoved)
                         | FSEventStreamEventFlags(kFSEventStreamEventFlagItemRenamed)
                     ) != 0,
                     hasUnrepresentedChanges: hasUnrepresentedChanges

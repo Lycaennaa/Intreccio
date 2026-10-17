@@ -69,6 +69,21 @@ extension AppCoordinator {
         scheduleUIStateSave()
         publish()
     }
+    func setShowCleanInitializedSubmodules(_ enabled: Bool, for repositoryID: UUID) {
+        guard !isShuttingDown,
+              let repository = repositories.first(where: { $0.id == repositoryID }),
+              repository.availability == .available,
+              repository.hasSubmodules else { return }
+        let isEnabled = state.uiState.showCleanSubmoduleRepositoryIDs.contains(repositoryID)
+        guard isEnabled != enabled else { return }
+        if enabled {
+            state.uiState.showCleanSubmoduleRepositoryIDs.insert(repositoryID)
+        } else {
+            state.uiState.showCleanSubmoduleRepositoryIDs.remove(repositoryID)
+        }
+        scheduleUIStateSave()
+        publish()
+    }
 
     func setMode(_ mode: AppMode) {
         guard !isShuttingDown, state.uiState.mode != mode else { return }

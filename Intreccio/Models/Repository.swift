@@ -12,6 +12,8 @@ nonisolated struct RepositorySnapshot: Codable, Sendable, Equatable, Identifiabl
     var canonicalPath: String
     var resourceID: String?
     var availability: RepositoryAvailability
+    var submoduleParentRepositoryID: UUID?
+    var submodulePath: String?
 }
 nonisolated enum GitHubRepositoryURL {
     static func webURL(from remote: String) -> URL? {
@@ -138,6 +140,23 @@ nonisolated struct GitDirectoryInfo: Sendable, Equatable {
 nonisolated struct StandaloneRepositoryLocation: Sendable, Equatable {
     let url: URL
     let gitDirectoryInfo: GitDirectoryInfo?
+    let submoduleRepositories: [ScannedRepository]
+    let hasSubmodules: Bool
+    let submoduleScanIncomplete: Bool
+
+    init(
+        url: URL,
+        gitDirectoryInfo: GitDirectoryInfo?,
+        submoduleRepositories: [ScannedRepository] = [],
+        hasSubmodules: Bool = false,
+        submoduleScanIncomplete: Bool = false
+    ) {
+        self.url = url
+        self.gitDirectoryInfo = gitDirectoryInfo
+        self.submoduleRepositories = submoduleRepositories
+        self.hasSubmodules = hasSubmodules
+        self.submoduleScanIncomplete = submoduleScanIncomplete
+    }
 }
 
 nonisolated struct RepoDescriptor: Sendable, Equatable, Identifiable {
@@ -150,6 +169,9 @@ nonisolated struct RepoDescriptor: Sendable, Equatable, Identifiable {
     let availability: RepositoryAvailability
     let gitDirectoryInfo: GitDirectoryInfo?
     let mainRepositoryURL: URL?
+    let submoduleParentRepositoryID: UUID?
+    let submodulePath: String?
+    let hasSubmodules: Bool
 
     init(
         id: UUID,
@@ -160,7 +182,10 @@ nonisolated struct RepoDescriptor: Sendable, Equatable, Identifiable {
         relativePath: String?,
         availability: RepositoryAvailability,
         gitDirectoryInfo: GitDirectoryInfo? = nil,
-        mainRepositoryURL: URL? = nil
+        mainRepositoryURL: URL? = nil,
+        submoduleParentRepositoryID: UUID? = nil,
+        submodulePath: String? = nil,
+        hasSubmodules: Bool = false
     ) {
         self.id = id
         self.source = source
@@ -171,6 +196,9 @@ nonisolated struct RepoDescriptor: Sendable, Equatable, Identifiable {
         self.availability = availability
         self.gitDirectoryInfo = gitDirectoryInfo
         self.mainRepositoryURL = mainRepositoryURL
+        self.submoduleParentRepositoryID = submoduleParentRepositoryID
+        self.submodulePath = submodulePath
+        self.hasSubmodules = hasSubmodules
     }
 
     var commonGitDirectoryURL: URL? { gitDirectoryInfo?.commonGitDirectoryURL }
@@ -197,7 +225,6 @@ nonisolated struct RepoDescriptor: Sendable, Equatable, Identifiable {
         return displayNames
     }
 
-
     func withMainRepositoryURL(_ repositoryURL: URL) -> RepoDescriptor {
         RepoDescriptor(
             id: id,
@@ -208,7 +235,28 @@ nonisolated struct RepoDescriptor: Sendable, Equatable, Identifiable {
             relativePath: relativePath,
             availability: availability,
             gitDirectoryInfo: gitDirectoryInfo,
-            mainRepositoryURL: repositoryURL
+            mainRepositoryURL: repositoryURL,
+            submoduleParentRepositoryID: submoduleParentRepositoryID,
+            submodulePath: submodulePath,
+            hasSubmodules: hasSubmodules
+        )
+    }
+
+    func withSubmoduleParentRepository(id parentID: UUID, path: String) -> RepoDescriptor {
+        RepoDescriptor(
+            id: id,
+            source: source,
+            url: url,
+            canonicalURL: canonicalURL,
+            resourceID: resourceID,
+            relativePath: relativePath,
+            availability: availability,
+            gitDirectoryInfo: gitDirectoryInfo,
+            mainRepositoryURL: mainRepositoryURL,
+            submoduleParentRepositoryID: parentID,
+            submodulePath: path,
+            hasSubmodules: hasSubmodules
         )
     }
 }
+

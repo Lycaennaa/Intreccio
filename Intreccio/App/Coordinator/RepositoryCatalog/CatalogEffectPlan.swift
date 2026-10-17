@@ -11,6 +11,7 @@ nonisolated enum CatalogRepositoryUIReconciliation {
         repositoryIDs: Set<UUID>
     ) {
         uiState.pinnedRepositoryIDs.formIntersection(repositoryIDs)
+        uiState.showCleanSubmoduleRepositoryIDs.formIntersection(repositoryIDs)
         if let selected = uiState.selectedRepoID, !repositoryIDs.contains(selected) {
             uiState.selectedRepoID = nil
         }

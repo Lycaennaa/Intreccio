@@ -12,6 +12,7 @@ final class RepoSidebarViewController: NSViewController,
         let watchRoots: [WatchRoot]
         let standaloneRepos: [StandaloneRepository]
         let pinnedRepositoryIDs: Set<UUID>
+        let showCleanSubmoduleRepositoryIDs: Set<UUID>
         let scanMessages: [UUID: String]
     }
 
@@ -29,19 +30,29 @@ final class RepoSidebarViewController: NSViewController,
         var badge: String?
         let kind: NodeKind
         let repositoryIsUnavailable: Bool
+        let repositoryDescriptor: RepoDescriptor?
+        let children: [Node]
+        weak var parent: Node?
 
         init(
             title: String,
             subtitle: String? = nil,
             badge: String? = nil,
             kind: NodeKind,
-            repositoryIsUnavailable: Bool = false
+            repositoryIsUnavailable: Bool = false,
+            repositoryDescriptor: RepoDescriptor? = nil,
+            children: [Node] = []
         ) {
             self.title = title
             self.subtitle = subtitle
             self.badge = badge
             self.kind = kind
             self.repositoryIsUnavailable = repositoryIsUnavailable
+            self.repositoryDescriptor = repositoryDescriptor
+            self.children = children
+            for child in children {
+                child.parent = self
+            }
         }
     }
 
@@ -184,7 +195,7 @@ final class RepoSidebarViewController: NSViewController,
     private func configureOutlineView(_ column: NSTableColumn) {
         outlineView.addTableColumn(column)
         outlineView.outlineTableColumn = column
-        outlineView.indentationPerLevel = 0
+        outlineView.indentationPerLevel = 14
         outlineView.headerView = nil
         outlineView.backgroundColor = .black
         outlineView.rowSizeStyle = .medium

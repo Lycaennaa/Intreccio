@@ -191,6 +191,19 @@ final class RepoSidebarMenuController: NSObject {
             id: repositoryID,
             to: menu
         )
+        if repository.availability == .available, repository.hasSubmodules {
+            let item = NSMenuItem(
+                title: "Show All Initialized Submodules",
+                action: #selector(toggleShowCleanInitializedSubmodules(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = repositoryID
+            item.state = coordinator.state.uiState.showCleanSubmoduleRepositoryIDs.contains(repositoryID)
+                ? .on
+                : .off
+            menu.addItem(item)
+        }
         menu.addItem(.separator())
         switch repository.source {
         case .watchRoot(let sourceID, _, _):
@@ -200,6 +213,7 @@ final class RepoSidebarMenuController: NSObject {
                 addMenuItem("Re-authorize Folder…", action: #selector(reauthorize(_:)), id: sourceID, to: menu)
             }
         case .standalone(let sourceID):
+            guard repository.submoduleParentRepositoryID == nil else { return }
             addMenuItem("Re-authorize…", action: #selector(reauthorize(_:)), id: sourceID, to: menu)
             addMenuItem("Remove Repo…", action: #selector(removeSource(_:)), id: sourceID, to: menu)
         }
@@ -227,6 +241,10 @@ final class RepoSidebarMenuController: NSObject {
         let allStandalone = repositories.allSatisfy {
             if case .standalone = $0.source { return true }
             return false
+        }
+        if allStandalone,
+           repositories.contains(where: { $0.submoduleParentRepositoryID != nil }) {
+            return
         }
         guard allWatchRoot || allStandalone else { return }
         menu.addItem(.separator())
@@ -291,6 +309,13 @@ final class RepoSidebarMenuController: NSObject {
         guard let id = sender.representedObject as? UUID else { return }
         coordinator.setRepositoryPinned(id, pinned: !coordinator.state.uiState.pinnedRepositoryIDs.contains(id))
     }
+    @objc func toggleShowCleanInitializedSubmodules(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? UUID,
+              let repository = coordinator.repositories.first(where: { $0.id == id }),
+              repository.hasSubmodules else { return }
+        let enabled = !coordinator.state.uiState.showCleanSubmoduleRepositoryIDs.contains(id)
+        coordinator.setShowCleanInitializedSubmodules(enabled, for: id)
+    }
     @objc func refetchSelectedRepositories(_ sender: NSMenuItem) {
         guard let target = selectionTarget(from: sender) else { return }
         let repositoryIDs = target.repositoryIDs.filter { repositoryID in
@@ -344,6 +369,7 @@ final class RepoSidebarMenuController: NSObject {
                 for repositoryID in repositoryIDs {
                     guard !Task.isCancelled,
                           let repository = coordinator.repositories.first(where: { $0.id == repositoryID }),
+                          repository.submoduleParentRepositoryID == nil,
                           case .standalone(let sourceID) = repository.source else { continue }
                     await coordinator.removeSource(sourceID)
                 }
