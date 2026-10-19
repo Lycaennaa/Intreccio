@@ -117,6 +117,7 @@ nonisolated struct RepoStatus: Sendable, Equatable {
     var branch = BranchStatus()
     var changes: [FileChange] = []
     var pushAccess: PushAccess = .unavailable
+    var hasOriginPushDestination = false
     var isRebaseInProgress = false
     var hasStash = false
     var stagedLineStats: DiffLineStats?

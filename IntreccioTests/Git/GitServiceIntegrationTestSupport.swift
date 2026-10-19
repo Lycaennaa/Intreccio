@@ -80,3 +80,99 @@ func XCTAssertThrowsErrorAsync<ExpectedError: Error>(
         XCTFail("Unexpected error: \(error)", file: file, line: line)
     }
 }
+// ProcessRunning witnesses must preserve the full execution contract.
+// swiftlint:disable function_parameter_count
+actor GitConfigScopeRunner: ProcessRunning {
+    private let base = GitRunner()
+    private let globalConfig: URL
+
+    init(globalConfig: URL) {
+        self.globalConfig = globalConfig
+    }
+
+    private func scopedEnvironment(_ environment: [String: String]) -> [String: String] {
+        var environment = environment
+        environment["GIT_CONFIG_GLOBAL"] = globalConfig.path
+        environment["GIT_CONFIG_NOSYSTEM"] = "1"
+        return environment
+    }
+
+    private func scopedRequest(_ request: ProcessExecutionRequest) -> ProcessExecutionRequest {
+        ProcessExecutionRequest(
+            repository: request.repository,
+            arguments: request.arguments,
+            input: request.input,
+            environment: scopedEnvironment(request.environment),
+            acceptedExitCodes: request.acceptedExitCodes,
+            outputLimit: request.outputLimit,
+            priority: request.priority,
+            cancellationBehavior: request.cancellationBehavior,
+            outputLimitBehavior: request.outputLimitBehavior
+        )
+    }
+
+    func execute(
+        repository: URL?,
+        arguments: [String],
+        input: Data?,
+        environment: [String: String],
+        acceptedExitCodes: Set<Int32>,
+        outputLimit: Int,
+        timeout: Duration,
+        priority: ProcessPriority
+    ) async throws -> ProcessCommandResult {
+        try await base.execute(
+            repository: repository,
+            arguments: arguments,
+            input: input,
+            environment: scopedEnvironment(environment),
+            acceptedExitCodes: acceptedExitCodes,
+            outputLimit: outputLimit,
+            timeout: timeout,
+            priority: priority
+        )
+    }
+
+    func executeAfterAdmission(
+        _ request: ProcessExecutionRequest,
+        timeout: Duration,
+        onAdmission: @escaping @Sendable () async throws -> Void
+    ) async throws -> ProcessCommandResult {
+        try await base.executeAfterAdmission(
+            scopedRequest(request),
+            timeout: timeout,
+            onAdmission: onAdmission
+        )
+    }
+
+    func executeWithoutTimeout(_ request: ProcessExecutionRequest) async throws -> ProcessCommandResult {
+        try await base.executeWithoutTimeout(scopedRequest(request))
+    }
+
+    func executeStreaming(
+        repository: URL?,
+        arguments: [String],
+        input: Data?,
+        environment: [String: String],
+        acceptedExitCodes: Set<Int32>,
+        outputLimit: Int,
+        timeout: Duration,
+        priority: ProcessPriority,
+        progress: @escaping @Sendable (ProcessOutputStream, Data) -> Void,
+        control: ProcessControl?
+    ) async throws -> ProcessCommandResult {
+        try await base.executeStreaming(
+            repository: repository,
+            arguments: arguments,
+            input: input,
+            environment: scopedEnvironment(environment),
+            acceptedExitCodes: acceptedExitCodes,
+            outputLimit: outputLimit,
+            timeout: timeout,
+            priority: priority,
+            progress: progress,
+            control: control
+        )
+    }
+}
+// swiftlint:enable function_parameter_count

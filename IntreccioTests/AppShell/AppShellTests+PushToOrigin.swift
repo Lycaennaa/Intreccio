@@ -23,6 +23,52 @@ extension AppShellTests {
         status.branch.behind = 1
         XCTAssertFalse(PushToOriginPolicy.isReady(status: status))
     }
+    func testInitialOriginPushRequiresACommitAndConfiguredOrigin() {
+        var status = RepoStatus()
+        status.branch.head = "main"
+        status.hasOriginPushDestination = true
+        status.pushAccess = .notGitHub
+        XCTAssertFalse(PushToOriginPolicy.canPushInitialCommitToOrigin(status: status))
+
+        status.branch.objectID = "0123456789abcdef0123456789abcdef01234567"
+        XCTAssertTrue(PushToOriginPolicy.canPushInitialCommitToOrigin(status: status))
+        XCTAssertTrue(PushToOriginPolicy.isReady(status: status))
+
+        status.hasOriginPushDestination = false
+        XCTAssertFalse(PushToOriginPolicy.canPushInitialCommitToOrigin(status: status))
+    }
+
+    @MainActor
+    func testInitialOriginCommitAppearsAsPushCandidate() throws {
+        let pushCandidate = try makePushCandidate(name: "initial", ahead: 0)
+        var status = pushCandidate.status
+        status.branch.upstream = nil
+        status.branch.objectID = "0123456789abcdef0123456789abcdef01234567"
+        status.hasOriginPushDestination = true
+        status.pushAccess = .notGitHub
+        let candidates = PushToOriginPolicy.candidates(
+            repositories: [pushCandidate.repository],
+            refreshStates: RepositorySnapshotMap([
+                pushCandidate.repository.id: RepositoryRefreshState(status: status)
+            ])
+        )
+
+        XCTAssertEqual(candidates.map(\.repository.id), [pushCandidate.repository.id])
+        XCTAssertTrue(PushToOriginPolicy.isReady(status: try XCTUnwrap(candidates.first).status))
+        let picker = PushToOriginPickerController()
+        picker.setCandidates(candidates)
+        XCTAssertEqual(picker.selectionSummary, "1 selected · 1 initial push")
+        let tableView = try XCTUnwrap(
+            allDescendantViews(in: picker.view).compactMap { $0 as? NSTableView }.first
+        )
+        let statusCell = try XCTUnwrap(
+            tableView.view(atColumn: 2, row: 0, makeIfNecessary: true)
+        )
+        XCTAssertEqual(
+            allDescendantViews(in: statusCell).compactMap { $0 as? NSTextField }.first?.stringValue,
+            "Initial push"
+        )
+    }
 
     @MainActor
     func testRepositoryDisplayNamesDisambiguateDuplicateBasenames() throws {

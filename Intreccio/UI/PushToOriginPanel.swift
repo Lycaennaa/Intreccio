@@ -21,7 +21,8 @@ nonisolated enum PushToOriginPolicy {
         return repositories.compactMap { repository in
             guard repository.availability == .available,
                   let status = refreshStates[repository.id]?.status,
-                  hasOutgoingOriginCommits(status: status) else { return nil }
+              hasOutgoingOriginCommits(status: status)
+                  || canPushInitialCommitToOrigin(status: status) else { return nil }
             return PushToOriginCandidate(
                 repository: repository,
                 status: status,
@@ -34,16 +35,40 @@ nonisolated enum PushToOriginPolicy {
     static func hasOutgoingOriginCommits(status: RepoStatus) -> Bool {
         status.branch.ahead > 0 && status.branch.upstream?.hasPrefix("origin/") == true
     }
+    static func canPushInitialCommitToOrigin(status: RepoStatus) -> Bool {
+        status.hasOriginPushDestination
+            && status.branch.head != nil
+            && status.branch.objectID != nil
+            && status.branch.upstream == nil
+    }
 
     static func isReady(status: RepoStatus) -> Bool {
-        status.branch.upstream?.hasPrefix("origin/") == true
-            && ChangesMutationPolicy.pushControlAvailability(
-                status: status,
-                mutationRunning: false
-            ).isAvailable
+        if hasOutgoingOriginCommits(status: status) {
+            return status.branch.upstream?.hasPrefix("origin/") == true
+                && ChangesMutationPolicy.pushControlAvailability(
+                    status: status,
+                    mutationRunning: false
+                ).isAvailable
+        }
+        return canPushInitialCommitToOrigin(status: status)
+            && !status.isRebaseInProgress
+            && status.pushAccess.allowsPush
     }
 
     static func unavailableReason(status: RepoStatus) -> String {
+        if canPushInitialCommitToOrigin(status: status) {
+            if status.isRebaseInProgress {
+                return "Finish or abort the rebase before pushing."
+            }
+            switch status.pushAccess {
+            case .denied:
+                return "GitHub does not grant write access to origin."
+            case .unavailable:
+                return "GitHub write access could not be verified."
+            case .allowed, .notGitHub:
+                return "Push is unavailable for the current repository state."
+            }
+        }
         guard hasOutgoingOriginCommits(status: status) else { return "No outgoing commits to origin." }
         return ChangesMutationPolicy.pushControlAvailability(
             status: status,
@@ -155,8 +180,12 @@ final class PushToOriginPickerController: NSObject, NSTableViewDataSource, NSTab
             let branch = entry.candidate.status.branch.head ?? "Unknown branch"
             label = NSTextField(labelWithString: "\(entry.candidate.displayName)  ·  \(branch)")
         } else if entry.isReady {
-            let ahead = entry.candidate.status.branch.ahead
-            label = NSTextField(labelWithString: "\(ahead) local commit\(ahead == 1 ? "" : "s")")
+            if PushToOriginPolicy.canPushInitialCommitToOrigin(status: entry.candidate.status) {
+                label = NSTextField(labelWithString: "Initial push")
+            } else {
+                let ahead = entry.candidate.status.branch.ahead
+                label = NSTextField(labelWithString: "\(ahead) local commit\(ahead == 1 ? "" : "s")")
+            }
         } else {
             label = NSTextField(labelWithString: "Not ready: \(entry.failure ?? "Push unavailable")")
         }
@@ -219,8 +248,22 @@ final class PushToOriginPickerController: NSObject, NSTableViewDataSource, NSTab
 
     private func updateSelectionControls() {
         let candidates = selectedCandidates
-        let commitCount = candidates.reduce(0) { $0 + $1.status.branch.ahead }
-        selectedCountLabel.stringValue = "\(candidates.count) selected · \(commitCount) commits"
+        let initialPushCount = candidates.filter {
+            PushToOriginPolicy.canPushInitialCommitToOrigin(status: $0.status)
+        }.count
+        let commitCount = candidates
+            .filter { !PushToOriginPolicy.canPushInitialCommitToOrigin(status: $0.status) }
+            .reduce(0) { $0 + $1.status.branch.ahead }
+        let pushSummary: String
+        if initialPushCount == 0 {
+            pushSummary = "\(commitCount) commits"
+        } else {
+            let initialPushes = "\(initialPushCount) initial push\(initialPushCount == 1 ? "" : "es")"
+            pushSummary = commitCount == 0
+                ? initialPushes
+                : "\(commitCount) commits + \(initialPushes)"
+        }
+        selectedCountLabel.stringValue = "\(candidates.count) selected · \(pushSummary)"
         if let pushButton {
             pushButton.title = "Push Selected (\(candidates.count))"
             pushButton.isEnabled = !candidates.isEmpty

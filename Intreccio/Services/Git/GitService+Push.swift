@@ -9,6 +9,7 @@ nonisolated struct GitPushTarget: Equatable, Sendable {
     let headObjectID: String
     let ahead: Int
     let pushURLs: [String]
+    let initialPushExpectedRemoteHeads: [String]?
 }
 
 private enum PushDestinationResult {
@@ -31,6 +32,15 @@ extension GitService {
 
     func preparePushTarget(repository: URL, status: RepoStatus) async throws -> GitPushTarget {
         guard let branch = status.branch.head else { throw GitServiceError.detachedHead }
+        if status.branch.upstream == nil {
+            let target = try await makeInitialOriginPushTarget(
+                repository: repository,
+                status: status,
+                branch: branch
+            )
+            try await requireAnyPushDestinationAccess(for: target)
+            return target
+        }
         guard let coordinates = try await upstreamCoordinates(
             repository: repository,
             branch: branch,
@@ -62,9 +72,13 @@ extension GitService {
             refreshUpstream: true,
             priority: .selectedRepository
         )
+        let needsUpstreamConfiguration = refreshed.status.branch.upstream == nil
         let currentTarget = try await makePushTarget(repository: repository, refreshed: refreshed)
         guard currentTarget == target else { throw GitServiceError.pushTargetChanged }
         try await pushConfiguredDestinations(currentTarget, repository: repository)
+        if needsUpstreamConfiguration {
+            try await configureInitialPushUpstream(currentTarget, repository: repository)
+        }
     }
 
     private func makePushTarget(
@@ -74,6 +88,13 @@ extension GitService {
         let status = refreshed.status
         guard !status.isRebaseInProgress else { throw GitServiceError.rebaseAlreadyInProgress }
         guard let branch = status.branch.head else { throw GitServiceError.detachedHead }
+        if status.branch.upstream == nil {
+            return try await makeInitialOriginPushTarget(
+                repository: repository,
+                status: status,
+                branch: branch
+            )
+        }
         guard let upstream = status.branch.upstream else { throw GitServiceError.missingUpstream }
         guard status.branch.ahead > 0 else { throw GitServiceError.branchHasNoOutgoingCommits }
         guard status.branch.behind == 0 else { throw GitServiceError.branchBehindUpstream }
@@ -90,11 +111,11 @@ extension GitService {
             remoteRef: destination.remoteRef,
             headObjectID: headObjectID,
             ahead: status.branch.ahead,
-            pushURLs: pushURLs
+            pushURLs: pushURLs,
+            initialPushExpectedRemoteHeads: nil
         )
     }
-
-    private func validatedPushDestination(
+    func validatedPushDestination(
         repository: URL,
         refreshed: GitUpstreamRefreshResult
     ) async throws -> (remote: String, remoteRef: String) {
@@ -118,7 +139,7 @@ extension GitService {
         return (remote, remoteRef)
     }
 
-    private func currentHeadObjectID(repository: URL) async throws -> String {
+    func currentHeadObjectID(repository: URL) async throws -> String {
         let head = try await runner.run(
             repository: repository,
             arguments: ["rev-parse", "--verify", "--quiet", "HEAD"],
@@ -139,7 +160,7 @@ extension GitService {
         return objectID
     }
 
-    private func pushURLs(
+    func pushURLs(
         repository: URL,
         remote: String,
         priority: ProcessPriority = .selectedRepository
@@ -173,8 +194,9 @@ extension GitService {
         repository: URL,
         priority: ProcessPriority
     ) async throws -> PushAccess {
+        guard status.branch.upstream != nil else { return status.pushAccess }
         guard status.branch.ahead > 0 else { return .notGitHub }
-        guard let branch = status.branch.head, status.branch.upstream != nil else { return .unavailable }
+        guard let branch = status.branch.head else { return .unavailable }
 
         do {
             let result = try await runner.run(
@@ -199,7 +221,7 @@ extension GitService {
         }
     }
 
-    private func pushAccess(for urls: [String]) async throws -> PushAccess {
+    func pushAccess(for urls: [String]) async throws -> PushAccess {
         var seen = Set<URL>()
         var repositories = [URL]()
         for url in urls {
@@ -228,7 +250,7 @@ extension GitService {
         return .allowed
     }
 
-    private func requireAnyPushDestinationAccess(for target: GitPushTarget) async throws {
+    func requireAnyPushDestinationAccess(for target: GitPushTarget) async throws {
         let access = try await pushAccess(for: target.pushURLs)
         try requirePushAccess(access, for: target)
     }
@@ -251,6 +273,10 @@ extension GitService {
         _ target: GitPushTarget,
         repository: URL
     ) async throws {
+        if let expectedRemoteHeads = target.initialPushExpectedRemoteHeads,
+           expectedRemoteHeads.count != target.pushURLs.count {
+            throw GitServiceError.pushTargetChanged
+        }
         var succeeded = [String]()
         var failures = [String]()
         destinations: for (index, pushURL) in target.pushURLs.enumerated() {
@@ -279,6 +305,24 @@ extension GitService {
         }
     }
 
+    private func pushArguments(
+        for target: GitPushTarget,
+        pushURL: String,
+        index: Int
+    ) -> [String] {
+        var arguments = ["push", "--porcelain"]
+        if let expectedRemoteHeads = target.initialPushExpectedRemoteHeads {
+            arguments.append(
+                "--force-with-lease=\(target.remoteRef):\(expectedRemoteHeads[index])"
+            )
+        }
+        arguments.append(contentsOf: [
+            "--",
+            pushURL,
+            "\(target.headObjectID):\(target.remoteRef)"
+        ])
+        return arguments
+    }
     private func pushDestination(
         _ target: GitPushTarget,
         repository: URL,
@@ -290,10 +334,7 @@ extension GitService {
             ?? "remote destination \(index + 1)"
         guard !Task.isCancelled else { return .cancelled(destination, remoteMayHaveChanged: false) }
 
-        let arguments = [
-            "push", "--porcelain", "--", pushURL,
-            "\(target.headObjectID):\(target.remoteRef)"
-        ]
+        let arguments = pushArguments(for: target, pushURL: pushURL, index: index)
         do {
             if let githubRepository {
                 let request = ProcessExecutionRequest(

@@ -4,6 +4,7 @@
 
 User-visible changes for the next release will be listed here.
 
+- Push to Origin now supports the first local commit to an empty origin and sets upstream tracking.
 - Add a multi-repository Push to Origin action with per-repository selection, reusing existing status and push-access checks.
 
 - Prevent upstream-fetch metadata events from queuing redundant repository status refreshes.

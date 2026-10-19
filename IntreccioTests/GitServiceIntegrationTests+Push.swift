@@ -238,7 +238,8 @@ final class GitServicePushTests: XCTestCase {
             remoteRef: scenario.target.remoteRef,
             headObjectID: scenario.target.headObjectID,
             ahead: scenario.target.ahead,
-            pushURLs: [scenario.target.pushURLs[0], secondURL]
+            pushURLs: [scenario.target.pushURLs[0], secondURL],
+            initialPushExpectedRemoteHeads: scenario.target.initialPushExpectedRemoteHeads
         )
         let gitRunner = GitPushInterceptor()
         let githubRunner = RecordingGitRunner(responses: [
@@ -331,7 +332,8 @@ final class GitServicePushTests: XCTestCase {
                 remoteRef: "refs/heads/main",
                 headObjectID: head,
                 ahead: 1,
-                pushURLs: ["https://github.com/octo/repo.git"]
+                pushURLs: ["https://github.com/octo/repo.git"],
+                initialPushExpectedRemoteHeads: nil
             )
         )
     }
@@ -367,7 +369,8 @@ final class GitServicePushTests: XCTestCase {
                 remoteRef: "refs/heads/main",
                 headObjectID: head,
                 ahead: 1,
-                pushURLs: [upstream.path, mirror.path]
+                pushURLs: [upstream.path, mirror.path],
+                initialPushExpectedRemoteHeads: nil
             )
         )
     }
@@ -387,9 +390,14 @@ private actor GitPushInterceptor: ProcessRunning {
     private let base = GitRunner()
     private(set) var pushAttempts = 0
     private let admissionGate: GitPushAdmissionGate?
+    private var beforePush: (@Sendable () async throws -> Void)?
 
     init(admissionGate: GitPushAdmissionGate? = nil) {
         self.admissionGate = admissionGate
+    }
+
+    func installBeforeFirstPushHook(_ hook: @escaping @Sendable () async throws -> Void) {
+        beforePush = hook
     }
 
     func execute(
@@ -404,7 +412,9 @@ private actor GitPushInterceptor: ProcessRunning {
     ) async throws -> ProcessCommandResult {
         if arguments.first == "push" {
             pushAttempts += 1
-            if pushAttempts == 1 {
+            if pushAttempts == 1, let beforePush {
+                try await beforePush()
+            } else if pushAttempts == 1 {
                 throw ProcessRunnerError.launchFailed("Injected first push failure")
             }
         }
@@ -502,5 +512,37 @@ private actor GitPushAdmissionGate {
         let continuation = releaseContinuation
         releaseContinuation = nil
         continuation?.resume()
+    }
+}
+
+extension GitServiceInitialPushTests {
+    func testInitialPushLeaseRejectsConcurrentBranchCreationAfterPreflight() async throws {
+        let fixture = try GitFixture(testCase: self)
+        let remote = try makeTestDirectory().appendingPathComponent("remote.git", isDirectory: true)
+        try runGit(at: remote.deletingLastPathComponent(), arguments: ["init", "--bare", "-b", "main", remote.path])
+        try fixture.write("base\n", to: "tracked.txt")
+        try fixture.git("add", "--", "tracked.txt")
+        try fixture.git("commit", "-m", "base")
+        let baseHead = try fixture.git("rev-parse", "HEAD").standardOutputText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        try fixture.write("local\n", to: "tracked.txt")
+        try fixture.git("commit", "-am", "local")
+        try fixture.git("remote", "add", "origin", remote.path)
+        let repository = fixture.url
+        let runner = GitPushInterceptor()
+        await runner.installBeforeFirstPushHook {
+            _ = try runGit(at: repository, arguments: ["push", remote.path, "\(baseHead):refs/heads/main"])
+        }
+        let service = GitService(runner: runner)
+        let target = try await service.preparePushTarget(repository: fixture.url)
+        do {
+            try await service.pushToUpstream(target: target)
+            XCTFail("Expected the destination lease to reject a concurrent branch creation")
+        } catch {
+            XCTAssertTrue(error is GitServiceError)
+        }
+        let remoteHead = try runGit(at: remote, arguments: ["rev-parse", "refs/heads/main"])
+            .standardOutputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertEqual(remoteHead, baseHead)
     }
 }

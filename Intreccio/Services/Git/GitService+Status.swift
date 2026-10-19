@@ -80,6 +80,11 @@ extension GitService {
             priority: priority,
             expandUntrackedDirectories: expandUntrackedDirectories
         )
+        status = try await statusForInitialOriginPush(
+            status,
+            repository: repository,
+            priority: priority
+        )
         guard refreshUpstream,
               status.branch.upstream != nil,
               let branch = status.branch.head else {
